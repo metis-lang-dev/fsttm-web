@@ -31,3 +31,9 @@ table { border-collapse: collapse; font: 12px ui-monospace, monospace; width: 10
 td, th { border-bottom: 1px solid var(--line); padding: 3px 6px; text-align: left; vertical-align: top; }
 tr.diff td:first-child { color: var(--diff); }
 tr.miss td { color: var(--bad); }
+header b { font: 12px ui-monospace, monospace; }
+header span { color: var(--muted); font-size: 12px; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.cut { color: var(--diff); font: 12px ui-monospace, monospace; }
+#events { max-height: 40vh; overflow-y: auto; font: 11px ui-monospace, monospace; color: var(--muted); overflow-wrap: anywhere; }
+details { margin-top: 12px; }

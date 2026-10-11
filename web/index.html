@@ -10,6 +10,8 @@
 <header>
   <h1>fsttm-web</h1>
   <span id="mode">intent</span>
+  <span>floor <b id="floor">—</b></span>
+  <span>attention <b id="attn">—</b></span>
   <span id="status">loading…</span>
 </header>
 <main>
@@ -18,74 +20,21 @@
     <input id="chatInput" type="text" autocomplete="off" autofocus placeholder="type an utterance">
     <button>send</button>
   </form>
-  <p class="hint">Step 1: intent mode (pass 1 under dog.gbnf, pass 2 the spoken ack). <a href="?parity">?parity</a> runs the 54-row corpus against the harness.</p>
+  <div class="bar">
+    <button id="micBtn" type="button">mic off</button>
+    <button id="sayLong" type="button">say something long</button>
+    <button id="saveBench" type="button">save bench (JSONL)</button>
+  </div>
+  <p class="hint">Chat alone is intent mode (step 1). <b>mic</b> starts the dialog: the floor machine over
+    SpeechRecognition and speechSynthesis, barge-in by words (<code>?barge_in=energy|none</code>, <code>?awake</code> to start awake).
+    <a href="?selftest">?selftest</a> runs the event table here; <a href="?parity">?parity</a> the 54-row corpus.</p>
   <section id="parity" hidden>
     <p id="paritySum"></p>
     <table><thead><tr><th></th><th>utterance</th><th>want</th><th>got</th><th>first ms</th><th>eval tok</th><th>JSON</th><th>voice</th></tr></thead>
     <tbody id="parityRows"></tbody></table>
   </section>
+  <details><summary>events</summary><div id="events"></div></details>
 </main>
-<script type="module">
-import { loadAssets, twoPass, intentOf } from './llm.js';
-import { parseCorpus, parseRef, runParity, summarize } from './parity.js';
-
-const $ = id => document.getElementById(id);
-const base = location.origin;
-const get = async f => { const r = await fetch(`assets/${f}`); if (!r.ok) throw new Error(`${f}: ${r.status}`); return r.text(); };
-const assets = await loadAssets(get);
-$('status').textContent = 'ready';
-
-function line(who, text, meta) {
-  const d = document.createElement('div');
-  d.className = `msg ${who}`;
-  d.textContent = text;
-  if (meta) { const m = document.createElement('small'); m.textContent = meta; d.append(m); }
-  $('chat').append(d);
-  $('chat').scrollTop = $('chat').scrollHeight;
-}
-
-let busy = false;
-$('chatForm').onsubmit = async e => {
-  e.preventDefault();
-  const user = $('chatInput').value.trim();
-  if (!user || busy) return;
-  $('chatInput').value = '';
-  busy = true; $('status').textContent = 'thinking…';
-  line('user', user);
-  try {
-    const r = await twoPass(base, { ...assets, user });
-    line('intent', r.json, `${intentOf(r.json)} · first token ${Math.round(r.p1.firstMs)} ms · json ${Math.round(r.p1.totalMs)} ms · ` +
-      `prompt tokens evaluated ${r.p1.timings.prompt_n} (cached ${r.p1.tokensCached})`);
-    line('nina', r.voice, `ack ${Math.round(r.p2.totalMs)} ms`);
-  } catch (err) {
-    line('error', String(err));
-  }
-  busy = false; $('status').textContent = 'ready'; $('chatInput').focus();
-};
-
-if (new URLSearchParams(location.search).has('parity')) {
-  $('mode').textContent = 'parity';
-  $('parity').hidden = false;
-  const rows = parseCorpus(await get('dog-corpus.tsv'));
-  const ref = parseRef(await get('harness-e2b.jsonl'));
-  const recs = [];
-  for await (const r of runParity(base, assets, rows, ref)) {
-    recs.push(r);
-    const tr = document.createElement('tr');
-    tr.className = r.class ? (r.same ? 'same' : 'diff') : 'miss';
-    for (const v of [r.class ? (r.same ? '=' : '≠') : '✗', r.utt, r.want, r.got, r.firstMs, r.p1PromptN, r.json, r.voice]) {
-      const td = document.createElement('td'); td.textContent = v; tr.append(td);
-    }
-    if (r.same === false) tr.title = `harness: ${r.harnessJson}`;
-    $('parityRows').append(tr);
-    $('status').textContent = `parity ${recs.length}/${rows.length}`;
-  }
-  const s = summarize(recs);
-  $('paritySum').textContent = `intent class ${s.classOK}/${s.n} · pass-1 JSON identical to the harness ${s.same}/${s.n} · ` +
-    `first token p50 ${s.firstP50} ms, p90 ${s.firstP90} ms · prompt tokens evaluated: row 1 ${s.p1PromptNFirst}, later rows max ${s.p1PromptNMax}`;
-  document.body.dataset.parity = JSON.stringify(s);
-  $('status').textContent = 'parity done';
-}
-</script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
