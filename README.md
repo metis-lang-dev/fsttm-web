@@ -4,6 +4,15 @@ The FSTTM floor machine in Chrome over a plain llama-server (design:
 [DESIGN.md](DESIGN.md)). Step 1: the skeleton and intent parity with the
 metis-agent harness.
 
+![fsttm-web: a free dialog with three barge-ins](docs/fsttm-web.png)
+
+A live session: the chat (left) shows three replies cut by talking over
+her, each with what was heard and the unsaid rest kept out of the context;
+the turns table times each one (first token ~40 ms, reply ~0.3-0.6 s,
+onset→cut 130-470 ms). On the right, the floor machine as the Python TUI
+draws it (current state green, previous blue, the trail of states with
+their dwell), the state and perf numbers, and the event log.
+
 ```
 ./run.sh                         # llama-server, gemma4 E2B Q4, page on http://localhost:8393
 node test/parity.mjs             # the 54-row corpus through the page's llm.js, vs the harness
