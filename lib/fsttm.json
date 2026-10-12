@@ -1,5 +1,5 @@
 {
- "about": "The N09-1071 finite-state turn-taking model as metis-agent go/internal/fsm has it: six floor states, the 14 transitions keyed by the (system,user) action pair, the action remap, and the §3.2 cost constants. Canonical here; fsttm-web/web/fsttm.json is a verbatim copy and TestTableIsTheJSON keeps fsm.go equal to it.",
+ "about": "The N09-1071 finite-state turn-taking model: six floor states, the 14 transitions keyed by the (system,user) action pair, the action remap, and the §3.2 cost constants. Canonical here (fsttm-web lib/); it came from metis-agent go/internal/fsm, removed in agent-framework iteration 3 (2026-10-12) when the dialog moved to the browser.",
  "states": [
   "SYSTEM",
   "BOTHs",

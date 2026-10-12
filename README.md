@@ -29,6 +29,10 @@ web/   index.html app.js fsmview.js eventtable.js bench.js parity.js  the refere
        backend/llama.js   the backend adapter over llama-server
 ```
 
+`lib/fsttm.json` and `lib/fixtures/` are the canonical floor machine and
+its fixtures (they came from metis-agent's Go `fsm` and `attention`,
+removed when the dialog moved to the browser).
+
 Another application imports the library by its package exports:
 
 ```js

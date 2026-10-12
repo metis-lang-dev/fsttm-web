@@ -89,7 +89,8 @@ const bench = new Bench({ sink: e => {
 
 const bargeIn = q.get('barge_in') ?? 'words';
 const dialog = new Dialog({ fsttm, attention, tts, bargeIn, log: bench.log, llm,
-  onHeard: (id, heard) => backend.cut(id, heard),
+  // a narration's id is n:<agent id>: what was heard of it goes back as heard{id, text}
+  onHeard: (id, heard) => id.startsWith('n:') ? agentWs?.heard(id.slice(2), heard) : backend.cut(id, heard),
   onTurn: r => { if (r.json) line('intent', r.json, 'intent'); } });
 window.fsttmDialog = dialog; // for CDP drivers (the cut bench, E5)
 window.fsttmBench = bench;
@@ -103,10 +104,11 @@ onAgentFrame = f => {
   if (kind !== undefined) rest.of = kind;
   if (ev === 'narration') {
     const text = f.form === 'R' ? f.line : (f.sentence || f.line);
-    const voice = narrateMode === 'all' || (narrateMode !== 'none' && VOICED.has(f.kind));
+    // an idle quiescence comes as R with no sentence: shown, never voiced
+    const voice = narrateMode === 'all' || (narrateMode !== 'none' && VOICED.has(f.kind) && !(f.kind === 'quiescence' && !f.sentence));
     bench.log('narration', { ...rest, voiced: voice });
     line('narr', text, `${f.kind} · ${f.form}${f.path ? ' · ' + f.path : ''}${f.form === 'R+N' ? ' · ' + f.line : ''}${voice ? '' : ' · shown, not voiced'}`);
-    if (voice && text) dialog.say(splitSentences(text), 'narration');
+    if (voice && text) dialog.say(splitSentences(text), 'narration', `n:${f.id}`);
     return;
   }
   if (ev === 'domains') { domains = f.domains ?? []; scheduleStats(); }

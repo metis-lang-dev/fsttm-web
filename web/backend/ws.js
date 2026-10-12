@@ -5,10 +5,10 @@
 // it would say unsolicited (narration{…}) and its panes' rows (runtime,
 // rack, command, pending, domains), handed to onFrame.
 //
-//   → backend  say_text{id,text,mode} · cut{id,heard} · task{id,result,detail} · say{text}
+//   → backend  say_text{id,text,mode} · cut{id,heard} · heard{id,text} · task{id,result,detail} · say{text}
 //              runtime_intent{text} · rack_mount{text,state}
 //   ← page     intent{id,intent,voice,…} · talk{id,text,done} · error{id,error}
-//              narration{path,kind,form,line,sentence} · runtime · rack · command · pending · domains
+//              narration{id,path,kind,form,line,sentence} · runtime · rack · command · pending · domains
 
 import { splitSentences } from 'fsttm-web/tts';
 
@@ -79,6 +79,8 @@ export class WsBackend {
   }
 
   cut(id, heard) { this.send({ ev: 'cut', id: this.wire(id), heard }); }
+  // heard: the page voiced the agent's narration id, this much of it
+  heard(id, text) { this.send({ ev: 'heard', id, text }); }
   task(id, result, detail = '') { this.send({ ev: 'task', id, result, detail }); }
   say(text) { this.send({ ev: 'say', text }); }
   runtimeIntent(text) { this.send({ ev: 'runtime_intent', text }); }

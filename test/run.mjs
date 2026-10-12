@@ -1,11 +1,10 @@
-// node test/run.mjs — the floor machine and the attention layer against the
-// fixtures the Go harness runs (metis-agent go/internal/{fsm,attention}/
-// testdata, copied verbatim; when that checkout is present the copies are
-// compared byte for byte, so a change on either side fails here).
+// node test/run.mjs — the floor machine and the attention layer against
+// their fixtures (lib/fsttm.json, lib/fixtures/). These are canonical: they
+// came from metis-agent go/internal/{fsm,attention}/testdata, whose Go
+// machines were removed in agent-framework iteration 3; no drift check is left.
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { homedir } from 'node:os';
 import { FSTTM } from 'fsttm-web/fsttm';
 import { Attention } from 'fsttm-web/attention';
 
@@ -13,16 +12,6 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const json = async p => JSON.parse(await readFile(join(root, p), 'utf8'));
 let pass = 0, fail = 0;
 const ok = (cond, what) => { if (cond) pass++; else { fail++; console.log('FAIL', what); } };
-
-// drift: the copies are the Go side's files
-const goDir = process.env.METIS_AGENT ?? join(homedir(), 'repo/perotheia-packages/metis-agent/go/internal');
-for (const [mine, theirs] of [['lib/fsttm.json', 'fsm/testdata/fsttm.json'],
-  ['lib/fixtures/fsttm-cases.json', 'fsm/testdata/fsttm-cases.json'],
-  ['lib/fixtures/attention-cases.json', 'attention/testdata/attention-cases.json']]) {
-  let other = null;
-  try { other = await readFile(join(goDir, theirs), 'utf8'); } catch { console.log(`skip drift check: ${theirs} not found`); continue; }
-  ok(other === await readFile(join(root, mine), 'utf8'), `${mine} differs from metis-agent ${theirs}`);
-}
 
 // FSTTM
 const table = await json('lib/fsttm.json');
