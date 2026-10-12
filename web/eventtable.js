@@ -92,6 +92,11 @@ export function rows() {
       await new Promise(r => setTimeout(r, 20));
       return `${mid} → ${c.d.state}/${c.tts.speaking} "${c.tts.spoken.at(-1)}"`;
     }, 'USER/false → SYSTEM/true "hello there. That is a long enough reply to be one sentence."', { bargeIn: 'energy' }],
+    ['a final starting with words she used apart ("what", "about")', 'not echo: the final reaches the LLM whole', async c => {
+      c.d.llm = async (text) => { c.calls.push(text); return { voice: 'What a lovely evening it is. Tell me about your plans for tonight, please.', json: '', firstMs: 25 }; };
+      await c.d.final('hello there'); c.adv(500); await c.d.final('what about jupiter');
+      return `llm(${c.calls.join(',')})`;
+    }, 'llm(hello there,what about jupiter)'],
     ['echo interim during SYSTEM', '[echo] dropped, never a grab', async c => {
       await c.d.final('hello there'); c.d.speechStart(); c.d.interim('you said hello there');
       return `${c.d.state} speaking=${c.tts.speaking} echo=${c.bench.events.filter(e => e.kind === 'echo').length}`;
