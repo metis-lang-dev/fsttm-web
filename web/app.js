@@ -3,12 +3,12 @@
 // timings, the numbers and the event log, laid out as the Python TUI's
 // panels; ?selftest (the §3 table in this Chrome + what this Chrome
 // offers), ?parity (the 54-row intent corpus, step 1).
-import { loadAssets, twoPass, talk } from './llm.js';
+import { loadAssets, LlamaBackend } from './backend/llama.js';
 import { parseCorpus, parseRef, runParity, summarize } from './parity.js';
-import { FSTTM } from './fsttm.js';
-import { Attention } from './attention.js';
-import { Dialog, attachRecognizer } from './dialog.js';
-import { BrowserTTS } from './tts.js';
+import { FSTTM } from 'fsttm-web/fsttm';
+import { Attention } from 'fsttm-web/attention';
+import { Dialog, attachRecognizer } from 'fsttm-web/dialog';
+import { BrowserTTS } from 'fsttm-web/tts';
 import { Bench } from './bench.js';
 import { runEventTable } from './eventtable.js';
 import { FsmView } from './fsmview.js';
@@ -18,7 +18,7 @@ const q = new URLSearchParams(location.search);
 const base = location.origin;
 const get = async f => { const r = await fetch(`assets/${f}`); if (!r.ok) throw new Error(`${f}: ${r.status}`); return r.text(); };
 const assets = await loadAssets(get);
-const table = await (await fetch('fsttm.json')).json();
+const table = await (await fetch('lib/fsttm.json')).json();
 
 // a panel follows its newest line unless the reader scrolled up in it
 function append(box, node, max = 400) {
@@ -43,14 +43,15 @@ const showReplies = () => { $('replyBtn').textContent = `replies: ${longReplies 
 $('replyBtn').onclick = () => { longReplies = !longReplies; showReplies(); };
 showReplies();
 
-async function llm(text, { signal, history }) {
+// the backend adapter (FRAMEWORK §6): turn(id, text, mode) → sentences,
+// cut(id, heard); llama-server here, the metis-agent wire later
+const backend = new LlamaBackend({ base, assets });
+async function llm(text, { signal, id }) {
   $('status').textContent = 'thinking…';
-  if (longReplies) {
-    const t = await talk(base, { user: text, history, signal });
-    return { voice: t.voice, json: '', firstMs: t.r.firstMs, mode: 'long' };
-  }
-  const r = await twoPass(base, { ...assets, user: text, signal });
-  return { voice: r.voice, json: r.json, firstMs: r.p1.firstMs, mode: 'short' };
+  const sentences = [];
+  for await (const s of backend.turn(id, text, longReplies ? 'talk' : 'intent', { signal })) sentences.push(s);
+  const info = backend.info[id] ?? {};
+  return { voice: sentences.join(' '), json: info.json, firstMs: info.firstMs, mode: longReplies ? 'long' : 'short' };
 }
 
 // ── the dialog, live from page load: typing talks to it at once, the mic
@@ -73,9 +74,11 @@ const bench = new Bench({ sink: e => {
 
 const bargeIn = q.get('barge_in') ?? 'words';
 const dialog = new Dialog({ fsttm, attention, tts, bargeIn, log: bench.log, llm,
+  onHeard: (id, heard) => backend.cut(id, heard),
   onTurn: r => { if (r.json) line('intent', r.json, 'intent'); } });
 window.fsttmDialog = dialog; // for CDP drivers (the cut bench, E5)
 window.fsttmBench = bench;
+window.fsttmBackend = backend;
 $('bargeSel').value = bargeIn;
 $('bargeSel').onchange = () => { dialog.bargeIn = $('bargeSel').value; bench.log('policy', { bargeIn: dialog.bargeIn }); };
 

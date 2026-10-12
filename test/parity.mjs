@@ -1,10 +1,10 @@
 // node test/parity.mjs [base]  — the parity run from the shell, through the
-// page's own llm.js/parity.js against a running ./run.sh. Writes
+// page's own backend/llama.js/parity.js against a running ./run.sh. Writes
 // test/out/parity.jsonl and prints the table; exit 1 below 54/54.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadAssets } from '../web/llm.js';
+import { loadAssets } from '../web/backend/llama.js';
 import { parseCorpus, parseRef, runParity, summarize } from '../web/parity.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');

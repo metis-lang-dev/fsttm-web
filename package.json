@@ -1,8 +1,20 @@
 {
   "name": "fsttm-web",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "the FSTTM floor machine in Chrome over llama-server: static files served by run.sh (llama-server --path web)",
+  "description": "the FSTTM floor machine in the browser: a dialog framework (lib/: floor machine, attention, dialog with barge-in and the heard-text cut, speechSynthesis) and its reference page (web/) over llama-server",
+  "exports": {
+    "./fsttm": "./lib/fsttm.js",
+    "./attention": "./lib/attention.js",
+    "./dialog": "./lib/dialog.js",
+    "./tts": "./lib/tts.js",
+    "./fsttm.json": "./lib/fsttm.json",
+    "./fixtures/*": "./lib/fixtures/*"
+  },
+  "files": [
+    "lib/"
+  ],
   "scripts": {
     "build": "npx tailwindcss@3.4.17 -c tailwind.config.cjs -i web/src/input.css -o web/styles.css --minify",
     "watch": "npx tailwindcss@3.4.17 -c tailwind.config.cjs -i web/src/input.css -o web/styles.css --watch"

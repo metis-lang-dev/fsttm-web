@@ -3,9 +3,9 @@
 // Runs in node (test/dialog.mjs) and in Chrome (index.html?selftest) on the
 // same Dialog; the TTS and the LLM are fakes so every row is deterministic
 // (what Chrome's real speechSynthesis does is measured separately).
-import { FSTTM } from './fsttm.js';
-import { Attention } from './attention.js';
-import { Dialog } from './dialog.js';
+import { FSTTM } from 'fsttm-web/fsttm';
+import { Attention } from 'fsttm-web/attention';
+import { Dialog } from 'fsttm-web/dialog';
 import { Bench } from './bench.js';
 
 export class FakeTTS {

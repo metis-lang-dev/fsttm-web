@@ -1,12 +1,17 @@
-// llm.js — the harness's two-pass intent turn (metis-agent internal/llm
-// TwoPass) over llama-server's /completion. Shared by the page and by
-// test/parity.mjs (node), so the parity run is the page's own code path.
+// backend/llama.js — the framework's standalone backend: a plain
+// llama-server (run.sh). The backend adapter (FRAMEWORK §6) on top of the
+// harness's two-pass intent turn (metis-agent internal/llm TwoPass) and the
+// free dialog, over llama-server's /completion. The lower functions are
+// shared by the page and by test/parity.mjs (node), so the parity run is the
+// page's own code path.
 //
 // Rendering is the harness's TemplateGemma4, byte for byte:
 //   <|turn>system\n{system}<turn|>\n<|turn>user\n{user}<turn|>\n<|turn>model\n
 // The system turn is the constant prefix; cache_prompt keeps it in the KV
 // slot, so a turn evaluates only the user tail (llama-server does the
 // prefix reuse the harness does by hand). The BOS comes from the server.
+
+import { splitSentences } from 'fsttm-web/tts';
 
 export const PASS2 = { temperature: 0.4, top_k: 40, n_predict: 50 }; // config.ws.yaml pass2
 const PASS1_MAX = 80;                  // the harness's pass-1 token cap
@@ -146,3 +151,47 @@ export async function talk(base, { user, history = [], signal, opts = TALK }) {
   const r = await complete(base, { prompt: renderTalk(prior, user), stop: [EOT], ...opts }, { signal });
   return { voice: clean(r.text).replace(/\s*\n+\s*/g, ' '), r };
 }
+
+// ── the backend adapter (FRAMEWORK §6) ─────────────────────────────────────
+// turn(id, text, mode, {signal}) → async iterable of sentences
+// cut(id, heard)                 → turn id was heard up to heard
+// mode: 'intent' (the two-pass turn: JSON + one ack) | 'talk' (free dialog).
+// The dialog history in talk mode is the backend's: the user's turns and
+// the replies as heard — a cut reply is kept up to the cut word and marked
+// [interrupted], so the next prompt shares the KV prefix up to it.
+export class LlamaBackend {
+  constructor({ base, assets, talkOpts = TALK, keep = 12 }) {
+    Object.assign(this, { base, assets, talkOpts, keep });
+    this.history = []; // {role: user|system, text, id?, full?, interrupted?}
+    this.info = {};    // id → {json, firstMs, mode} of the turn (the page's panes)
+  }
+
+  async *turn(id, text, mode, { signal } = {}) {
+    if (mode === 'intent') {
+      const r = await twoPass(this.base, { ...this.assets, user: text, signal });
+      this.info[id] = { json: r.json, firstMs: r.p1.firstMs, mode };
+      this.remember(id, text, r.voice); // talk turns see the intent turns too, as the page's history did
+      if (r.voice) yield* splitSentences(r.voice);
+      return;
+    }
+    const t = await talk(this.base, { user: text, history: this.history, signal, opts: this.talkOpts });
+    this.info[id] = { json: '', firstMs: t.r.firstMs, mode };
+    this.remember(id, text, t.voice);
+    yield* splitSentences(t.voice);
+  }
+
+  remember(id, text, voice) {
+    this.history.push({ role: 'user', text: text.trim() });
+    if (voice) this.history.push({ role: 'system', id, text: voice, full: voice });
+    this.history = this.history.slice(-2 * this.keep);
+  }
+
+  cut(id, heard) {
+    const h = this.history.find(x => x.id === id);
+    if (!h) return;
+    h.text = heard.trim() || '...';
+    h.interrupted = norm(heard) !== norm(h.full);
+  }
+}
+
+const norm = s => s.replace(/\s+/g, ' ').trim();

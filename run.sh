@@ -12,9 +12,11 @@ MODEL=${MODEL:-$HOME/repo/perotheia-packages/metis-agent/go/models/gemma4/gemma-
 PORT=${PORT:-8393}
 # llama-server serves nothing outside --path (symlinks get 403): the page's
 # assets are copied from prompt/ grammar/ test/fixtures/ (the canonical
-# files) into web/assets/ (gitignored) at every start.
-rm -rf web/assets && mkdir -p web/assets
+# files) into web/assets/, and lib/ into web/lib/ (both gitignored), at every start.
+rm -rf web/assets web/lib && mkdir -p web/assets
 cp prompt/*.txt grammar/dog.gbnf test/fixtures/dog-corpus.tsv test/fixtures/harness-e2b.jsonl web/assets/
+# the library (lib/, the framework's exportable part) is served beside the page
+cp -r lib web/lib
 # -c 4096 and -b 512 as the harness (config.ws.yaml); one slot = one dialog,
 # so the KV prefix (the system turn) stays cached between turns.
 exec "$LLAMA/llama-server" -m "$MODEL" -ngl 99 -c 4096 -b 512 -np 1 \

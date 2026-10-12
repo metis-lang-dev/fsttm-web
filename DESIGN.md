@@ -159,11 +159,13 @@ step 4's, with numbers.
 ```
 fsttm-web/
   DESIGN.md  run.sh  README.md
-  web/index.html  web/fsttm.json  web/fsttm.js  web/attention.js
-  web/dialog.js  web/llm.js  web/tts.js  web/bench.js  web/app.css
+  lib/fsttm.js  lib/fsttm.json  lib/attention.js  lib/dialog.js  lib/tts.js  lib/fixtures/
+                 (the framework: package.json exports, metis-agent FRAMEWORK.md §6)
+  web/index.html  web/app.js  web/fsmview.js  web/eventtable.js  web/bench.js  web/parity.js
+  web/backend/llama.js  (the backend adapter over llama-server)
   prompt/dog-prompt.txt  prompt/pass2-examples-gemma4.txt  prompt/dialog-extra.txt
   grammar/dog.gbnf
-  test/fixtures/*.json  test/run.mjs   (node, no framework)
+  test/fixtures/  test/run.mjs  test/dialog.mjs  test/parity.mjs   (node, no framework)
 ```
 
 1. **Skeleton + parity.** `run.sh` (llama-server, gemma4 E2B Q4, `--path

@@ -3,7 +3,7 @@
 // (test/fixtures/harness-e2b.jsonl: llmbench, metis-agent internal/llm, E2B
 // Q4, prompt = dog-prompt + pass2-examples-gemma4). Shared by the page
 // (?parity) and test/parity.mjs.
-import { twoPass, intentOf } from './llm.js';
+import { twoPass, intentOf } from './backend/llama.js';
 
 export function parseCorpus(tsv) {
   return tsv.split('\n').filter(l => l.trim() && !l.startsWith('#')).map(l => {

@@ -104,6 +104,11 @@
     <code>?reply=short</code> starts in the intent mode. <a class="underline" href="?selftest">?selftest</a> runs the §3 event table in this Chrome;
     <a class="underline" href="?parity">?parity</a> the 54-row intent corpus.</p>
 </div>
+<!-- the framework's modules by their package names (package.json "exports"); run.sh serves lib/ as lib/ -->
+<script type="importmap">
+{ "imports": { "fsttm-web/fsttm": "./lib/fsttm.js", "fsttm-web/attention": "./lib/attention.js",
+               "fsttm-web/dialog": "./lib/dialog.js", "fsttm-web/tts": "./lib/tts.js" } }
+</script>
 <script type="module" src="app.js"></script>
 </body>
 </html>
