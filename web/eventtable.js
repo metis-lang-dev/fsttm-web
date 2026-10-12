@@ -41,7 +41,7 @@ async function make(table, { bargeIn = 'words', asleep = false, llmDelay = 0 } =
   };
   const fsttm = new FSTTM(table, { now: () => clock });
   const d = new Dialog({ fsttm, attention: new Attention({ startAsleep: asleep }), tts, llm, bargeIn,
-    log: bench.log, now: () => clock });
+    log: bench.log, now: () => clock, autoResumeMs: 5 });
   const prev = fsttm.onChange;
   fsttm.onChange = (e, s, t) => { trans.push(`${s}→${t}`); prev(e, s, t); };
   return { d, tts, calls, trans, bench, adv: ms => { clock += ms; } };
@@ -72,6 +72,26 @@ export function rows() {
       const h = c.d.history.at(-1); const cut = c.bench.events.find(e => e.kind === 'cut');
       return `${c.d.state} speaking=${c.tts.speaking} heard="${h.text}" interrupted=${h.interrupted} onset→cut=${cut.onsetToCutMs}ms`;
     }, 'USER speaking=false heard="You said hel" interrupted=true onset→cut=320ms'],
+    ['user words while SYSTEM, no speechstart (Chrome sends one per session)', 'one word: user G → BOTHs, she keeps talking; the second word cuts', async c => {
+      await c.d.final('hello there'); c.d.interim('wait'); const mid = `${c.d.state}/${c.tts.speaking}`;
+      c.d.interim('wait please'); return `${mid} → ${c.d.state}/${c.tts.speaking}`;
+    }, 'BOTHs/true → USER/false'],
+    ['"continue" after a cut', 'the context keeps what was heard; she resumes at the cut word, no LLM call', async c => {
+      await c.d.final('hello there'); c.tts.progress(9); c.d.interim('no wait');
+      const cut = c.d.history.at(-1).text; await c.d.final('continue');
+      const resumed = c.tts.spoken.at(-1); c.tts.finish();
+      return `heard="${cut}" resumed="${resumed}" llm=${c.calls.length} context="${c.d.history.at(-1).text}" interrupted=${c.d.history.at(-1).interrupted}`;
+    }, 'heard="You said" resumed="hello there. That is a long enough reply to be one sentence." llm=1 context="You said hello there. That is a long enough reply to be one sentence." interrupted=false'],
+    ['a new question after a cut', 'the unsaid rest is dropped: the LLM sees only what was heard', async c => {
+      await c.d.final('hello there'); c.tts.progress(9); c.d.interim('no wait');
+      await c.d.final('what time is it');
+      return `resume=${c.d.resume === null} prior="${c.d.history.at(-2).text}" llm(${c.calls.join(',')})`;
+    }, 'resume=true prior="You said" llm(hello there,what time is it)'],
+    ['energy cut, then no words (a cough)', 'auto-resume after autoResumeMs', async c => {
+      await c.d.final('hello there'); c.tts.progress(9); c.d.speechStart(); const mid = `${c.d.state}/${c.tts.speaking}`;
+      await new Promise(r => setTimeout(r, 20));
+      return `${mid} → ${c.d.state}/${c.tts.speaking} "${c.tts.spoken.at(-1)}"`;
+    }, 'USER/false → SYSTEM/true "hello there. That is a long enough reply to be one sentence."', { bargeIn: 'energy' }],
     ['echo interim during SYSTEM', '[echo] dropped, never a grab', async c => {
       await c.d.final('hello there'); c.d.speechStart(); c.d.interim('you said hello there');
       return `${c.d.state} speaking=${c.tts.speaking} echo=${c.bench.events.filter(e => e.kind === 'echo').length}`;

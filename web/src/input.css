@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* .panel's display:flex must not show a hidden panel (?parity) */
+[hidden] { display: none !important; }
+
+/* the panels: a header line and one scrolling body each (the TUI's panels) */
+@layer components {
+  .panel { @apply flex flex-col bg-slate-900 border border-slate-800 rounded-xl p-3; }
+  .panel-head { @apply flex items-center justify-between gap-2 mb-2 text-[11px] font-bold uppercase tracking-wide shrink-0; }
+  .panel-note { @apply text-[10px] font-mono font-normal normal-case tracking-normal text-slate-500; }
+  .scroll { @apply flex-1 min-h-0 overflow-y-auto pr-1; }
+  .btn { @apply px-2.5 py-1 rounded-md text-[11px] font-mono border border-slate-600 text-slate-300 hover:bg-slate-800; }
+  .link { @apply text-[10px] font-mono font-normal normal-case tracking-normal text-slate-500 underline hover:text-slate-300; }
+  .pill { @apply px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold; }
+  .cell { @apply px-1.5 py-0.5 align-top border-b border-slate-800; }
+  .msg { @apply px-2.5 py-1.5 rounded-lg max-w-[85%] text-sm leading-snug break-words; }
+  .msg small { @apply block text-[10px] font-mono text-slate-500; }
+  .msg.user { @apply self-end ml-auto bg-sky-950 text-sky-100; }
+  .msg.nina { @apply bg-emerald-950 text-emerald-100; }
+  .msg.intent { @apply bg-slate-800 text-slate-300 font-mono text-[11px]; }
+  .msg.cut { @apply bg-transparent text-amber-300 font-mono text-[11px] px-0 py-0; }
+  .msg.error { @apply bg-transparent text-red-400 font-mono text-[11px] px-0 py-0; }
+  tr.same td:first-child { @apply text-emerald-400; }
+  tr.diff td:first-child { @apply text-amber-300; }
+  tr.miss td { @apply text-red-400; }
+}
+
+/* the floor diagram (fsmview.js): the TUI's colours — current bold green,
+   previous bold blue, the rest dim */
+.fsm { width: 100%; max-height: 16rem; }
+.fsm-line { stroke: #475569; stroke-width: 1.5; }
+.fsm-node { font: 14px ui-monospace, monospace; fill: #64748b; }
+.fsm-note { font: 11px ui-monospace, monospace; fill: #475569; }
+.fsm-node.prev { fill: #60a5fa; font-weight: 700; }
+.fsm-node.cur { fill: #4ade80; font-weight: 700; }

@@ -116,3 +116,33 @@ export async function loadAssets(read) {
     read('dog-prompt.txt'), read('pass2-examples-gemma4.txt'), read('dog.gbnf')]);
   return { system: p + x, gbnf: g };
 }
+
+// ── long replies (step 2's barge-in bench) ────────────────────────────────
+// The intent turn answers in one short ack, too short to talk over. talk is
+// a plain spoken conversation on the same model and slot: no grammar, no
+// JSON, a few sentences, the recent turns as context. It is the page's
+// "replies: long" mode, not a harness path.
+export const TALK_SYSTEM = `You are Nina, a warm, curious and talkative voice assistant, chatting with a person out loud.
+Be genuinely helpful: answer what was asked, then add something of your own: an example, a detail, a small story, an opinion, or a question back.
+Keep the conversation going and show interest in the person. Have opinions and a sense of humour; never say you cannot chat.
+Keep it short: two to four natural spoken sentences, no lists, no headings, no markup, no emoji.
+If the person interrupted you, pick up from what they said, not from what you were saying.`;
+export const TALK = { temperature: 1.0, top_k: 64, top_p: 0.95, min_p: 0.05, repeat_penalty: 1.1, n_predict: 160 };
+
+export function renderTalk(history, user, system = TALK_SYSTEM) {
+  let p = renderSystem(system);
+  for (const h of history.slice(-12)) {
+    const role = h.role === 'user' ? 'user' : 'model';
+    const text = h.interrupted ? `${h.text} [interrupted]` : h.text;
+    p += `<|turn>${role}\n${text}${EOT}\n`;
+  }
+  return p + `<|turn>user\n${user.trim()}${EOT}\n<|turn>model\n`;
+}
+
+export async function talk(base, { user, history = [], signal, opts = TALK }) {
+  // the dialog pushes the user's turn before replying: drop it from history
+  const prior = history.length && history.at(-1).role === 'user' && history.at(-1).text === user
+    ? history.slice(0, -1) : history;
+  const r = await complete(base, { prompt: renderTalk(prior, user), stop: [EOT], ...opts }, { signal });
+  return { voice: clean(r.text).replace(/\s*\n+\s*/g, ' '), r };
+}

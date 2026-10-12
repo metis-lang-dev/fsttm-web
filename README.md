@@ -21,3 +21,16 @@ open http://localhost:8393/?parity   # the same run in Chrome
 - `test/fixtures/harness-e2b.jsonl`: the harness's answers on E2B Q4,
   `llmbench -template gemma4 -prompt <dog-prompt + pass2-examples-gemma4>
   -corpus grammar/dog-corpus.tsv` (metis-agent internal/llm, 54/54).
+
+## The page (step 2)
+
+The dialog runs from page load: type to her, or press **mic** (it wakes her).
+**replies: long** (the default) is free conversation, several sentences to
+talk over; **short** is the harness's intent turn. Panels follow the Python
+FSTTM TUI: chat over turn timings on the left; the floor diagram (the TUI's,
+current state green, the one just left blue),
+the numbers and the event log on the right. Each panel scrolls on its own.
+
+Styles are Tailwind 3.4.17, built like metis-loop's nina-web (no bundler):
+`npm run build` turns `web/src/input.css` into `web/styles.css` (committed).
+llama-server sends no cache headers: after an update, reload with Ctrl+Shift+R.

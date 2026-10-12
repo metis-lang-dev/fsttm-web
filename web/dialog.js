@@ -15,6 +15,12 @@ import { splitSentences } from './tts.js';
 
 export const STOP_WORDS = ['stop', 'halt', 'freeze', 'quiet'];
 
+// RESUME_PHRASES pick an interrupted narration up where it was cut, without
+// a new LLM call (the Python FSTTM server's RESUME_PHRASES).
+export const RESUME_PHRASES = ['continue', 'go on', 'please continue', 'keep going', 'go ahead',
+  'please go on', 'carry on', 'and then', 'what else'];
+const resumePhrase = text => RESUME_PHRASES.includes(text.toLowerCase().replace(/[^a-z' ]+/g, ' ').trim().replace(/\s+/g, ' '));
+
 // keywordStop: at most three words, one of them a stop word (the harness's
 // F12 rule; here it also runs on interims).
 export function keywordStop(text, words = STOP_WORDS) {
@@ -38,13 +44,31 @@ export function userWords(text, spoken) {
   return novel;
 }
 
+// pastEcho is what the user said, for the LLM: the transcript from its first
+// word that is not the system's own, kept whole. userWords would also drop
+// the user's words that she happened to say ("wait, what about the park"
+// after a reply about a park lost "the park"); echo comes first in the
+// transcript, the user's words after it.
+export function pastEcho(text, spoken) {
+  const words = text.trim().split(/\s+/);
+  const vocab = new Set(toks(spoken));
+  const i = words.findIndex(w => toks(w).some(x => !vocab.has(x)));
+  return i < 0 ? '' : words.slice(i).join(' ');
+}
+
 // isEcho is userWords' complement: a transcript with no user words.
 export const isEcho = (text, spoken) => toks(text).length > 0 && userWords(text, spoken).length === 0;
 
 export class Dialog {
   constructor({ fsttm, attention, tts, llm, bargeIn = 'words', stopWords = STOP_WORDS,
-    log = () => {}, now = () => performance.now(), onTurn = () => {} }) {
-    Object.assign(this, { fsttm, attention, tts, llm, bargeIn, stopWords, log, now, onTurn });
+    log = () => {}, now = () => performance.now(), onTurn = () => {}, minWords = 2, autoResumeMs = 1500 }) {
+    Object.assign(this, { fsttm, attention, tts, llm, bargeIn, stopWords, log, now, onTurn, minWords, autoResumeMs });
+    // the narration a cut left unsaid: {units, entry} — entry is the history
+    // turn holding what was heard; resuming speaks the units and grows it
+    this.resume = null;
+    this.resumeTimer = null;
+    this.wordsSinceCut = false;
+    this.speakingResume = null; // the entry a resume in progress grows
     this.history = [];       // {role: user|system, text, interrupted?}
     this.parked = [];        // system utterances waiting for a free floor
     this.abort = null;       // AbortController of the LLM call in flight
@@ -91,6 +115,11 @@ export class Dialog {
       return;
     }
     if (spoken) text = userWords(text, spoken).join(' '); // the user's words past the echo
+    if (!text.trim()) return;
+    this.wordsSinceCut = true;
+    // Chrome fires speechstart once per recognition session, so an onset
+    // older than the last final is stale: the first user word of this turn is it
+    if (this.onset == null) { this.onset = this.now(); this.log('onset', { state: this.state, from: 'interim' }); }
     this.log('interim', { text, state: this.state });
     if (!this.attention.awake()) return;
     const busy = this.tts.speaking || this.abort;
@@ -99,7 +128,17 @@ export class Dialog {
       this.cut('keyword');
       return;
     }
-    if (this.state === 'BOTHs' && this.bargeIn === 'words') { this.cutInterim = text; this.cut('words'); return; }
+    // user words while she holds the floor are an onset even when Chrome sent
+    // no speechstart (it sends one per recognition session): SYSTEM → BOTHs
+    if (this.state === 'SYSTEM' && this.tts.speaking) {
+      this.fsttm.tryAction('user', 'G');
+      if (this.bargeIn === 'energy') { this.cut('energy'); return; }
+    }
+    // words: the overlap holds (BOTHs) until the user's words are sure — two
+    // of them, or a final; one word over her speech may be a misrecognition
+    if (this.state === 'BOTHs' && this.bargeIn === 'words' && toks(text).length >= this.minWords) {
+      this.cutInterim = text; this.cut('words'); return;
+    }
     if (this.state === 'FREEu' || this.state === 'FREEs') this.fsttm.tryAction('user', 'G'); // onset missed: the words confirm the grab
   }
 
@@ -107,10 +146,12 @@ export class Dialog {
     text = text.trim();
     this.log('final', { text, state: this.state, cutInterim: this.cutInterim });
     this.cutInterim = null;
+    this.finalOnset = this.onset; // a cut at this final still measures from it
+    this.onset = null; // the next turn's onset is its own
     if (!text) return;
     const spoken = this.spoken();
     if (spoken && isEcho(text, spoken)) { this.log('echo', { text, final: true }); return; }
-    if (spoken) text = userWords(text, spoken).join(' ');
+    if (spoken) text = pastEcho(text, spoken);
     const d = this.attention.onUtterance(text);
     this.log('attention', { action: d.action, state: this.attention.state });
     if (d.action === 'ignore') return;
@@ -122,6 +163,9 @@ export class Dialog {
     if (d.action === 'sleep') return this.say(['Voice controls disabled.'], 'sleep');
     const cmd = d.action === 'wake' ? d.text : text;
     if (!cmd) return; // the wake word alone: awake and listening
+    this.wordsSinceCut = true;
+    clearTimeout(this.resumeTimer);
+    if (this.resume && resumePhrase(cmd)) { this.log('resume', { why: 'phrase', text: cmd }); this.resumeNow(); return; }
     this.history.push({ role: 'user', text: cmd });
     if (keywordStop(cmd, this.stopWords)) { this.log('keyword_stop', { text: cmd }); return; }
     await this.reply(cmd);
@@ -129,6 +173,7 @@ export class Dialog {
 
   // ── the system side ───────────────────────────────────────────────────
   async reply(text) {
+    this.resume = null; // a new turn: what was left unsaid stays unsaid
     this.abort?.abort();
     const ctl = new AbortController();
     this.abort = ctl;
@@ -144,7 +189,7 @@ export class Dialog {
       if (this.abort === ctl) this.abort = null;
     }
     if (ctl.signal.aborted) return;
-    this.log('llm', { ms: this.now() - t0, firstMs: r.firstMs, voice: r.voice, json: r.json });
+    this.log('llm', { text, ms: this.now() - t0, firstMs: r.firstMs, voice: r.voice, json: r.json, mode: r.mode });
     this.onTurn(r);
     if (r.voice) this.say(splitSentences(r.voice), 'reply');
   }
@@ -159,6 +204,7 @@ export class Dialog {
       return;
     }
     if (!this.fsttm.tryAction('system', 'G')) { this.parked.push({ sentences, why }); return; }
+    const entry = why === 'resume' ? this.speakingResume : null;
     const t = this.now();
     this.log('speak', { why, sentences, freeuDwell: this.lastFinalAt != null ? t - this.lastFinalAt : null });
     this.lastFinalAt = null;
@@ -167,7 +213,8 @@ export class Dialog {
       onend: completed => {
         if (!completed) return; // a cut releases the floor itself
         this.remember(sentences.join(' '));
-        this.history.push({ role: 'system', text: sentences.join(' ') });
+        if (entry) { entry.text = `${entry.text} ${sentences.join(' ')}`.trim(); entry.interrupted = false; this.speakingResume = null; }
+        else this.history.push({ role: 'system', text: sentences.join(' ') });
         this.fsttm.tryAction('system', 'R'); // SYSTEM -(R,W)-> FREEs on audio end, never on text end
         this.log('tts_end', { completed });
       },
@@ -195,15 +242,53 @@ export class Dialog {
   // cut is the system's R during overlap: TTS cancelled, the LLM stream
   // aborted, the turn recorded as heard and marked [interrupted].
   cut(why) {
-    const all = this.tts.cur?.sentences?.join(' ') ?? '';
+    const cur = this.tts.cur;
+    const all = cur?.sentences?.join(' ') ?? '';
     const heard = this.tts.cancel();
     if (all) this.remember(all);
+    // the context cut: the history keeps only what was heard, as if the rest
+    // was never generated (the next prompt shares the KV prefix up to it); the
+    // rest — the tail of the sentence being spoken, then the sentences after
+    // it — waits for "continue" or an auto-resume
+    let rest = [];
+    if (cur && heard !== null) {
+      const done = cur.sentences.slice(0, cur.i).join(' ');
+      const part = heard.slice(done.length).trim();
+      const s = cur.sentences[cur.i] ?? '';
+      rest = [s.startsWith(part) ? s.slice(part.length).trim() : s, ...cur.sentences.slice(cur.i + 1)].filter(Boolean);
+    }
     if (this.abort) { this.abort.abort(); this.abort = null; }
-    const ms = this.onset != null ? this.now() - this.onset : null;
+    const onset = this.onset ?? this.finalOnset;
+    this.finalOnset = null;
+    const ms = onset != null ? this.now() - onset : null;
     const estimated = !!this.tts.estimated;
-    if (heard !== null) this.history.push({ role: 'system', text: heard, interrupted: true, estimated });
+    let entry = null;
+    if (heard !== null) {
+      entry = this.speakingResume; // a resume cut again: its turn grows
+      if (entry) { entry.text = `${entry.text} ${heard}`.trim(); entry.interrupted = true; }
+      else { entry = { role: 'system', text: heard, interrupted: true, estimated }; this.history.push(entry); }
+      this.speakingResume = null;
+    }
+    this.resume = rest.length && entry ? { units: rest, entry } : null;
+    this.wordsSinceCut = why === 'words' || why === 'final' || why === 'none';
+    clearTimeout(this.resumeTimer);
+    // a cut no words confirmed (energy) was maybe a cough: with no words
+    // within autoResumeMs, she goes on (the Python server's auto-resume)
+    if (this.resume && !this.wordsSinceCut) this.resumeTimer = setTimeout(() => {
+      if (!this.wordsSinceCut && this.resume) { this.log('resume', { why: 'auto (no words after the cut)' }); this.resumeNow(); }
+    }, this.autoResumeMs);
     if (this.state === 'BOTHs' || this.state === 'SYSTEM' || this.state === 'BOTHu') this.fsttm.tryAction('system', 'R');
-    this.log('cut', { why, onsetToCutMs: ms, heard, estimated, interim: this.cutInterim, state: this.state });
+    this.log('cut', { why, onsetToCutMs: ms, heard, estimated, interim: this.cutInterim, state: this.state, rest: rest.join(' ') });
+  }
+
+  // resumeNow speaks what the cut left unsaid, from the word it stopped at
+  resumeNow() {
+    const r = this.resume;
+    this.resume = null;
+    if (!r) return;
+    if (this.state === 'USER' || this.state === 'BOTHu') this.fsttm.tryAction('user', 'R'); // the user let go
+    this.speakingResume = r.entry;
+    this.say(r.units, 'resume');
   }
 }
 
