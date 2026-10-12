@@ -48,6 +48,19 @@ to `heard` (called on a cut and when a resumed turn finishes). The adapter
 owns the dialog history. `web/backend/llama.js` is the llama-server one;
 the page wires it as `llm` and `onHeard` of `Dialog`.
 
+`web/backend/ws.js` is the other adapter: metis-agent's wire (metis-agent
+`docs/FRAMEWORK.md` §5). Served by metis-agent
+(`metis-agent -config config.agent.yaml -ui-dir <fsttm-web>/web`), the page
+finds `/ws` and uses it; served by llama-server it falls back to
+`backend/llama.js` (`?backend=llama|ws` forces one). Over ws the agent also
+sends its narrations (`narration{path,kind,form,line,sentence}`): the page
+voices surprises, results, notices, quiescence, task outcomes and
+announcements floor permitting (parked while you hold the floor or she
+sleeps) and shows the clause events without voicing them
+(`?narrate=all|none`); runtime, rack, command, pending and domains rows go
+to the event log. `node --experimental-websocket test/parity.mjs
+ws://localhost:8395/ws` runs the corpus through the agent.
+
 - `web/backend/llama.js`: the harness's two-pass turn (TemplateGemma4 rendering, pass 1
   greedy under `dog.gbnf`, pass 2 the bare `Spoken response:` continuation)
   over `/completion` with `cache_prompt`.

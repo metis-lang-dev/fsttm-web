@@ -20,6 +20,7 @@
   .msg.user { @apply self-end ml-auto bg-sky-950 text-sky-100; }
   .msg.nina { @apply bg-emerald-950 text-emerald-100; }
   .msg.intent { @apply bg-slate-800 text-slate-300 font-mono text-[11px]; }
+  .msg.narr { @apply bg-violet-950/60 text-violet-200 text-[13px]; }
   .msg.cut { @apply bg-transparent text-amber-300 font-mono text-[11px] px-0 py-0; }
   .msg.error { @apply bg-transparent text-red-400 font-mono text-[11px] px-0 py-0; }
   tr.same td:first-child { @apply text-emerald-400; }

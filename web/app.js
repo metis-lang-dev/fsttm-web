@@ -4,11 +4,12 @@
 // panels; ?selftest (the §3 table in this Chrome + what this Chrome
 // offers), ?parity (the 54-row intent corpus, step 1).
 import { loadAssets, LlamaBackend } from './backend/llama.js';
+import { connect } from './backend/ws.js';
 import { parseCorpus, parseRef, runParity, summarize } from './parity.js';
 import { FSTTM } from 'fsttm-web/fsttm';
 import { Attention } from 'fsttm-web/attention';
 import { Dialog, attachRecognizer } from 'fsttm-web/dialog';
-import { BrowserTTS } from 'fsttm-web/tts';
+import { BrowserTTS, splitSentences } from 'fsttm-web/tts';
 import { Bench } from './bench.js';
 import { runEventTable } from './eventtable.js';
 import { FsmView } from './fsmview.js';
@@ -43,9 +44,18 @@ const showReplies = () => { $('replyBtn').textContent = `replies: ${longReplies 
 $('replyBtn').onclick = () => { longReplies = !longReplies; showReplies(); };
 showReplies();
 
-// the backend adapter (FRAMEWORK §6): turn(id, text, mode) → sentences,
-// cut(id, heard); llama-server here, the metis-agent wire later
-const backend = new LlamaBackend({ base, assets });
+// the backend adapter (metis-agent FRAMEWORK §6): turn(id, text, mode) →
+// sentences, cut(id, heard). Served by metis-agent, the page talks to it
+// over /ws (backend/ws.js); served by llama-server, to /completion
+// (backend/llama.js). ?backend=llama|ws forces one.
+const want = q.get('backend');
+const wsURL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+let onAgentFrame = () => {}; // set below, once the panes exist
+const agentWs = want === 'llama' ? null : await connect(wsURL, { onFrame: f => onAgentFrame(f) });
+if (want === 'ws' && !agentWs) throw new Error(`no metis-agent at ${wsURL}`);
+const backend = agentWs ?? new LlamaBackend({ base, assets });
+const backendName = agentWs ? 'metis-agent (ws)' : 'llama-server';
+let domains = [];
 async function llm(text, { signal, id }) {
   $('status').textContent = 'thinking…';
   const sentences = [];
@@ -62,6 +72,11 @@ const attention = new Attention({ wakeWords: ['nina', 'hey nina', 'hello nina'],
   sleepPhrases: ['go to sleep', 'voice off', 'stop listening', "that's all"], startAsleep: q.has('asleep') });
 const tts = new BrowserTTS();
 const turns = [];
+// narrations voiced (the rest are shown): what was said out loud before the
+// rack, at quiescence and surprises (RAG §8.4: per-clause talk was the
+// cost); ?narrate=all voices every one, ?narrate=none none
+const narrateMode = q.get('narrate') ?? 'default';
+const VOICED = new Set(['surprise', 'notice', 'result', 'quiescence', 'task', 'announce', 'reading']);
 const trail = []; // the last floor states, {state, t}: a short state is seen here
 let recognition = {};
 
@@ -79,6 +94,25 @@ const dialog = new Dialog({ fsttm, attention, tts, bargeIn, log: bench.log, llm,
 window.fsttmDialog = dialog; // for CDP drivers (the cut bench, E5)
 window.fsttmBench = bench;
 window.fsttmBackend = backend;
+
+// ── metis-agent's frames: narrations voiced floor permitting (say() parks
+// them while the user holds the floor or she sleeps), the rest logged ────
+onAgentFrame = f => {
+  // a frame's own kind (narration, runtime) is logged as `of`: bench.log's kind is the frame's ev
+  const { ev, t, kind, ...rest } = f;
+  if (kind !== undefined) rest.of = kind;
+  if (ev === 'narration') {
+    const text = f.form === 'R' ? f.line : (f.sentence || f.line);
+    const voice = narrateMode === 'all' || (narrateMode !== 'none' && VOICED.has(f.kind));
+    bench.log('narration', { ...rest, voiced: voice });
+    line('narr', text, `${f.kind} · ${f.form}${f.path ? ' · ' + f.path : ''}${f.form === 'R+N' ? ' · ' + f.line : ''}${voice ? '' : ' · shown, not voiced'}`);
+    if (voice && text) dialog.say(splitSentences(text), 'narration');
+    return;
+  }
+  if (ev === 'domains') { domains = f.domains ?? []; scheduleStats(); }
+  if (ev === 'command') line('narr', `${f.name} ${JSON.stringify(f.args ?? {})}`, `command ${f.id}`);
+  bench.log(ev === 'rack' ? 'rack' : ev, ev === 'rack' ? { last: f.last, paths: (f.paths ?? []).length } : rest);
+};
 $('bargeSel').value = bargeIn;
 $('bargeSel').onchange = () => { dialog.bargeIn = $('bargeSel').value; bench.log('policy', { bargeIn: dialog.bargeIn }); };
 
@@ -184,6 +218,8 @@ function renderStats() {
     ['barge-in', dialog.bargeIn],
     ['recognizer', recCtl ? (recognition.processLocally ? 'on-device' : 'cloud') : 'off'],
     ['tts heard', tts.boundaries ? 'word boundaries' : 'estimated by time'],
+    ['backend', backendName],
+    ...(agentWs ? [['domains', domains.length ? domains.map(d => `${d.display || d.path} (${d.state})`).join(', ') : 'none']] : []),
     ['', ''],
     ['turns', turns.length],
     ['barge-ins', `${m.cuts}${m.cuts ? ' · ' + Object.entries(m.byPolicy).map(([k, v]) => `${k} ${v}`).join(', ') : ''}`],

@@ -26,9 +26,12 @@ export function parseRef(jsonl) {
 // class = the intent class matches the corpus; same = the pass-1 JSON is
 // byte-identical to the harness's (any diff is a rendering bug: prompt,
 // grammar and model are the same).
-export async function* runParity(base, assets, rows, ref) {
+// ws: a WsBackend (backend/ws.js) — the rows go through metis-agent's
+// intent turn instead of llama-server's /completion.
+export async function* runParity(base, assets, rows, ref, { ws = null } = {}) {
+  let n = 0;
   for (const row of rows) {
-    const r = await twoPass(base, { ...assets, user: row.utt });
+    const r = ws ? await viaWs(ws, `p${++n}`, row.utt) : await twoPass(base, { ...assets, user: row.utt });
     const h = ref.get(row.utt);
     const got = intentOf(r.json);
     yield {
@@ -40,6 +43,16 @@ export async function* runParity(base, assets, rows, ref) {
       p2PromptN: r.p2.timings.prompt_n,
     };
   }
+}
+
+// viaWs shapes a metis-agent intent answer like twoPass's (the agent's
+// timings: tail eval, pass 1, pass 2; no prompt-token count on the wire)
+async function viaWs(ws, id, utt) {
+  const r = await ws.intent(id, utt);
+  const f = r.frame ?? {};
+  return { json: r.json, voice: f.model_voice ?? r.voice,
+    p1: { firstMs: f.t_eval_ms ?? r.firstMs, totalMs: (f.t_eval_ms ?? 0) + (f.t_json_ms ?? 0), timings: {}, tokensCached: undefined },
+    p2: { totalMs: f.t_tts_ms ?? 0, timings: {} } };
 }
 
 export function summarize(recs) {
