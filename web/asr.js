@@ -60,19 +60,23 @@ export function summarize(recs) {
 // a row only routes the results that arrive while it is open. speechstart
 // comes once per session, so a row's onset is its first interim, and its
 // speech end is its last interim (read) or the WAV's end (play).
-class Listener {
+export class Listener {
   constructor(SR, { processLocally, onListening, onState }) {
     this.SR = SR; this.processLocally = processLocally; this.onListening = onListening; this.onState = onState;
     this.row = null; this.want = false; this.rec = null; this.open = false;
   }
+  // start opens the session once; a second call waits on the same opening
   start() {
+    if (this.ready) return this.ready;
     this.want = true;
-    return new Promise(resolve => {
+    return this.ready = new Promise(resolve => {
       const boot = () => {
         const rec = this.rec = new this.SR();
         rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = true;
         if (this.processLocally) rec.processLocally = true;
         rec.onaudiostart = () => { this.open = true; this.onState?.('mic open'); this.row?.ev('audiostart'); resolve(); };
+        clearTimeout(this.slow);
+        this.slow = setTimeout(() => { if (!this.open && this.want) this.onState?.('the mic has not opened in 5 s: is another tab using the mic or SpeechRecognition? (close it) · Chrome\'s mic permission for localhost?'); }, 5000);
         rec.onresult = e => {
           for (let i = e.resultIndex; i < e.results.length; i++) {
             const r = e.results[i];
@@ -89,7 +93,7 @@ class Listener {
       boot();
     });
   }
-  stop() { this.want = false; try { this.rec?.stop(); } catch {} }
+  stop() { this.want = false; this.ready = null; clearTimeout(this.slow); try { this.rec?.stop(); } catch {} }
 
   // one row: open it, play the WAV (play) or wait for the reader (read),
   // close it on its final or its timeout
@@ -127,8 +131,9 @@ class Listener {
   }
 }
 
-export async function* runAsr({ SR, rows, mode, processLocally, base, assets, wavBase, next, onPrompt, onInterim, onListening, onState }) {
-  const L = new Listener(SR, { processLocally, onListening, onState });
+// listener: an open Listener (the page's mic button), else one is opened here
+export async function* runAsr({ SR, rows, mode, processLocally, base, assets, wavBase, next, onPrompt, onInterim, onListening, onState, listener = null }) {
+  const L = listener ?? new Listener(SR, { processLocally, onListening, onState });
   await L.start();
   try {
   for (const [i, row] of rows.entries()) {
@@ -148,5 +153,5 @@ export async function* runAsr({ SR, rows, mode, processLocally, base, assets, wa
     };
     if (mode === 'play') await new Promise(res => setTimeout(res, 600));
   }
-  } finally { L.stop(); }
+  } finally { if (!listener) L.stop(); }
 }
