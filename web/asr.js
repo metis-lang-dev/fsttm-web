@@ -56,7 +56,7 @@ export function summarize(recs) {
 
 // one row: a fresh session; play the WAV once the mic is open (play mode),
 // wait for the final (or the timeout), close the session
-function recognizeOne(SR, row, { mode, processLocally, audioURL, onInterim }) {
+function recognizeOne(SR, row, { mode, processLocally, audioURL, onInterim, onListening }) {
   return new Promise(resolve => {
     const rec = new SR();
     rec.lang = 'en-US'; rec.continuous = false; rec.interimResults = true;
@@ -68,6 +68,7 @@ function recognizeOne(SR, row, { mode, processLocally, audioURL, onInterim }) {
     const finish = why => {
       if (done) return;
       done = true; clearTimeout(timer);
+      onListening?.(false);
       out.end = why;
       try { rec.abort(); } catch {}
       audio?.pause();
@@ -76,6 +77,7 @@ function recognizeOne(SR, row, { mode, processLocally, audioURL, onInterim }) {
     const arm = ms => { clearTimeout(timer); timer = setTimeout(() => finish('timeout'), ms); };
     rec.onaudiostart = () => {
       ev('audiostart');
+      onListening?.(true);
       if (mode === 'read') { out.t0 = performance.now(); arm(8000); return; }
       audio = new Audio(audioURL);
       audio.onplaying = () => { out.t0 = performance.now(); ev('playing'); };
@@ -95,17 +97,20 @@ function recognizeOne(SR, row, { mode, processLocally, audioURL, onInterim }) {
     };
     rec.onerror = e => { ev('error', { error: e.error }); if (e.error !== 'no-speech') out.error = e.error; };
     rec.onend = () => finish(out.final ? 'final' : 'ended');
-    rec.start();
+    // the mic never opened (another recognizer holds it, permission): the row
+    // ends instead of waiting forever
+    arm(6000);
+    try { rec.start(); } catch (e) { out.error = String(e); finish('start-error'); }
   });
 }
 
 // runAsr yields one record per row as it lands. Read mode waits for the
 // page's `next()` between rows (the reader's pace); play mode leaves a gap.
-export async function* runAsr({ SR, rows, mode, processLocally, base, assets, wavBase, next, onPrompt, onInterim }) {
+export async function* runAsr({ SR, rows, mode, processLocally, base, assets, wavBase, next, onPrompt, onInterim, onListening }) {
   for (const [i, row] of rows.entries()) {
     onPrompt?.(row, i);
     if (mode === 'read') await next();
-    const r = await recognizeOne(SR, row, { mode, processLocally, audioURL: `${wavBase}/${row.wav}`, onInterim });
+    const r = await recognizeOne(SR, row, { mode, processLocally, audioURL: `${wavBase}/${row.wav}`, onInterim, onListening });
     // where the speech ended: the WAV's end in play (the recognizer's
     // speechend lags it by its own endpointing), speechend in read
     const endMs = mode === 'play' ? r.wavEndMs : r.speechEndMs;

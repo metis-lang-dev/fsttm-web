@@ -376,6 +376,9 @@ if (q.has('asr')) {
   const mode = q.get('asr') === 'read' ? 'read' : 'play';
   $('mode').textContent = `asr · ${mode}`;
   $('asr').hidden = false;
+  // one recognizer at a time in Chrome: the bench owns the mic, the dialog's is off
+  if (recCtl) micOff();
+  $('micBtn').disabled = true; $('micBtn').textContent = 'mic: the asr bench';
   let rows = parseManifest(await get('corpus-wav/manifest.tsv'));
   if (q.get('only')) { const keep = new Set(q.get('only').split(',')); rows = rows.filter(r => keep.has(r.split) || keep.has(r.wav)); }
   const recs = [];
@@ -396,17 +399,19 @@ if (q.has('asr')) {
     a.download = `fsttm-asr-${mode}-${Date.now()}.jsonl`;
     a.click();
   };
-  $('asrPrompt').textContent = mode === 'read' ? 'press start, then read each line after "next"' : 'press start and stay quiet: the speakers play 54 commands';
+  $('asrPrompt').textContent = mode === 'read' ? 'press start; for each line press space (or "next line"), wait for "listening — say it now", say it' : 'press start and stay quiet: the speakers play 54 commands';
   $('status').textContent = 'asr ready';
   $('asrStart').onclick = async () => {
     $('asrStart').disabled = true;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { line('error', 'no SpeechRecognition in this browser'); return; }
-    caps = await probeLocal(SR);
+    // cloud unless ?asr…&local (on-device is not required; install() can wait on a download)
+    caps = q.has('local') ? await probeLocal(SR) : { api: true, processLocally: false, note: 'cloud (default; &local tries on-device)' };
     line('intent', JSON.stringify(caps), 'recognition');
     for await (const r of runAsr({ SR, rows, mode, processLocally: caps.processLocally, base, assets, wavBase: 'assets/corpus-wav', next,
       onPrompt: (row, i) => { $('asrPrompt').textContent = `${i + 1}/${rows.length} · ${mode === 'read' ? 'say: ' : 'playing: '}"${row.text}"`; $('asrHeard').textContent = ''; },
-      onInterim: t => { $('asrHeard').textContent = `… ${t}`; } })) {
+      onInterim: t => { $('asrHeard').textContent = `… ${t}`; },
+      onListening: on => { $('status').textContent = on ? (mode === 'read' ? 'listening — say it now' : 'listening') : 'scoring…'; } })) {
       recs.push(r);
       const tr = document.createElement('tr');
       tr.className = !r.final ? 'miss' : r.intent === r.want ? 'same' : 'diff';
