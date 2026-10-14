@@ -1,9 +1,13 @@
 {
   "name": "fsttm-web",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.2.0",
   "type": "module",
   "description": "the FSTTM floor machine in the browser: a dialog framework (lib/: floor machine, attention, dialog with barge-in and the heard-text cut, speechSynthesis) and its reference page (web/) over llama-server",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/metis-lang-dev/fsttm-web.git"
+  },
   "exports": {
     "./fsttm": "./lib/fsttm.js",
     "./attention": "./lib/attention.js",
@@ -13,10 +17,12 @@
     "./fixtures/*": "./lib/fixtures/*"
   },
   "files": [
-    "lib/"
+    "lib/",
+    "README.md"
   ],
   "scripts": {
     "build": "npx tailwindcss@3.4.17 -c tailwind.config.cjs -i web/src/input.css -o web/styles.css --minify",
-    "watch": "npx tailwindcss@3.4.17 -c tailwind.config.cjs -i web/src/input.css -o web/styles.css --watch"
+    "watch": "npx tailwindcss@3.4.17 -c tailwind.config.cjs -i web/src/input.css -o web/styles.css --watch",
+    "test": "node test/run.mjs && node test/dialog.mjs"
   }
 }

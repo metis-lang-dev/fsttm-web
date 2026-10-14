@@ -1,3 +1,9 @@
 web/assets/
 test/out/
 web/lib/
+
+# packaging (npm pack, the wheel)
+*.tgz
+dist/
+__pycache__/
+*.egg-info/

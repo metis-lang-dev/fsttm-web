@@ -1,0 +1,36 @@
+# fsttm_web: the Python UI library — the same lib/ (the floor machine,
+# attention, the dialog, tts; ES modules) and the reference page, packaged
+# for a Python web server, with a helper that mounts them. One source: the
+# wheel copies lib/, web/, prompt/, grammar/ and test/fixtures/ in; an
+# editable install reads them from the checkout (fsttm_web.ROOT).
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fsttm-web"
+dynamic = ["version"]
+description = "The FSTTM floor machine in the browser as a Python UI library: lib/ (floor, attention, dialog with barge-in and the heard-text cut, speechSynthesis) and the reference page, mounted on a Python web server"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+aiohttp = ["aiohttp>=3.9"]
+
+[tool.hatch.version]
+path = "python/fsttm_web/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+# the sources as they are in the repo, remapped into the package; .gitignore
+# holds (web/lib and web/assets are run.sh's copies for llama-server)
+only-include = ["python/fsttm_web", "lib", "web", "prompt", "grammar", "test/fixtures"]
+exclude = ["web/src"]
+
+[tool.hatch.build.targets.wheel.sources]
+"python/fsttm_web" = "fsttm_web"
+"lib" = "fsttm_web/lib"
+"web" = "fsttm_web/web"
+"prompt" = "fsttm_web/assets/prompt"
+"grammar" = "fsttm_web/assets/grammar"
+"test/fixtures" = "fsttm_web/assets/fixtures"

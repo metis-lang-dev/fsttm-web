@@ -77,6 +77,40 @@ ws://localhost:8395/ws` runs the corpus through the agent.
   `llmbench -template gemma4 -prompt <dog-prompt + pass2-examples-gemma4>
   -corpus grammar/dog-corpus.tsv` (metis-agent internal/llm, 54/54).
 
+## Packages: JS and Python, one source
+
+lib/ is packaged twice, from the same files; nothing is copied by hand.
+
+**JS** (`package.json`, exports as above, `files: lib/`):
+
+```
+npm install git+https://github.com/metis-lang-dev/fsttm-web.git#<commit>   # the repo is private: needs git auth
+npm pack                     # fsttm-web-<version>.tgz; npm install ./fsttm-web-<version>.tgz
+```
+
+A page served by any server points its import map at the installed
+`node_modules/fsttm-web/lib/` (or the server mounts it at `/lib/`).
+
+**Python** (`pyproject.toml`, package `fsttm_web`): the same lib/, the
+reference page (web/) and its assets (prompt/, grammar/, test/fixtures/),
+with a mount helper for aiohttp and the wire in Python terms:
+
+```
+pip install -e 'fsttm-web[aiohttp]'      # editable: reads lib/ and web/ from this checkout
+python examples/serve.py                 # the reference page + a stub backend: http://localhost:8397/?backend=ws
+pytest test/test_python.py
+```
+
+```python
+import fsttm_web                     # LIB, WEB, asset(name), routes(), IMPORT_MAP
+from fsttm_web.aiohttp import mount  # mount(app): /lib/, /assets/<name>, the page at / (page=False: lib only)
+import fsttm_web.protocol as wire    # the frames (say_text, cut, intent, talk, narration …), parse(), Echo (a stub backend)
+```
+
+A wheel (`pip wheel .`) carries its own copies of lib/, web/ and the
+assets, made at build time; run.sh's gitignored copies (web/lib,
+web/assets) are not in it.
+
 ## The page (step 2)
 
 The dialog runs from page load: type to her, or press **mic** (it wakes her).
