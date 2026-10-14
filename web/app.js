@@ -367,3 +367,58 @@ if (q.has('parity')) {
   document.body.dataset.parity = JSON.stringify(s);
   $('status').textContent = 'parity done';
 }
+
+// ── ?asr (step 4, E5): the recognizer on the E2 corpus through the real mic
+// — ?asr plays each WAV on the speakers, ?asr=read shows the line for the
+// user to say; WER, latency and the intent after ASR per row ─────────────
+if (q.has('asr')) {
+  const { parseManifest, runAsr, summarize: asrSum } = await import('./asr.js');
+  const mode = q.get('asr') === 'read' ? 'read' : 'play';
+  $('mode').textContent = `asr · ${mode}`;
+  $('asr').hidden = false;
+  let rows = parseManifest(await get('corpus-wav/manifest.tsv'));
+  if (q.get('only')) { const keep = new Set(q.get('only').split(',')); rows = rows.filter(r => keep.has(r.split) || keep.has(r.wav)); }
+  const recs = [];
+  let caps = null, nextRes = null;
+  const next = () => new Promise(res => { nextRes = res; $('asrNext').hidden = false; });
+  const go = () => { if (nextRes) { const r = nextRes; nextRes = null; $('asrNext').hidden = true; r(); } };
+  $('asrNext').onclick = go;
+  document.addEventListener('keydown', e => { if (e.code === 'Space' && nextRes) { e.preventDefault(); go(); } });
+  const show = () => {
+    const s = asrSum(recs).all;
+    $('asrSum').textContent = `${recs.length}/${rows.length} · ${caps?.processLocally ? 'on-device' : 'cloud'} · WER mean ${s.werMean ?? '—'} · exact ${s.exact}/${s.n} · ` +
+      `intent ${s.intentOK}/${s.n} · first interim p50 ${s.firstInterimP50 ?? '—'} ms · final after speech end p50 ${s.finalAfterEndP50 ?? '—'} / p90 ${s.finalAfterEndP90 ?? '—'} ms`;
+  };
+  $('asrSave').onclick = () => {
+    const a = document.createElement('a');
+    const body = [{ kind: 'caps', mode, userAgent: navigator.userAgent, recognition: caps }, ...recs, { kind: 'summary', mode, ...asrSum(recs) }];
+    a.href = URL.createObjectURL(new Blob([body.map(r => JSON.stringify(r)).join('\n') + '\n'], { type: 'application/jsonl' }));
+    a.download = `fsttm-asr-${mode}-${Date.now()}.jsonl`;
+    a.click();
+  };
+  $('asrPrompt').textContent = mode === 'read' ? 'press start, then read each line after "next"' : 'press start and stay quiet: the speakers play 54 commands';
+  $('status').textContent = 'asr ready';
+  $('asrStart').onclick = async () => {
+    $('asrStart').disabled = true;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { line('error', 'no SpeechRecognition in this browser'); return; }
+    caps = await probeLocal(SR);
+    line('intent', JSON.stringify(caps), 'recognition');
+    for await (const r of runAsr({ SR, rows, mode, processLocally: caps.processLocally, base, assets, wavBase: 'assets/corpus-wav', next,
+      onPrompt: (row, i) => { $('asrPrompt').textContent = `${i + 1}/${rows.length} · ${mode === 'read' ? 'say: ' : 'playing: '}"${row.text}"`; $('asrHeard').textContent = ''; },
+      onInterim: t => { $('asrHeard').textContent = `… ${t}`; } })) {
+      recs.push(r);
+      const tr = document.createElement('tr');
+      tr.className = !r.final ? 'miss' : r.intent === r.want ? 'same' : 'diff';
+      for (const v of [r.intent === r.want ? '=' : '≠', r.text, r.final || `(${r.end}${r.error ? ' ' + r.error : ''})`, r.wer.toFixed(2), r.want, r.intent ?? '—',
+        r.firstInterimMs ?? '—', r.finalAfterEndMs ?? '—', r.split]) {
+        const td = document.createElement('td'); td.className = 'cell'; td.textContent = v; tr.append(td);
+      }
+      append($('asrRows'), tr, 1000);
+      show();
+    }
+    $('asrPrompt').textContent = 'done: save (JSONL) and send me the file';
+    document.body.dataset.asr = JSON.stringify(asrSum(recs));
+    $('status').textContent = 'asr done';
+  };
+}
