@@ -411,7 +411,8 @@ if (q.has('asr')) {
     for await (const r of runAsr({ SR, rows, mode, processLocally: caps.processLocally, base, assets, wavBase: 'assets/corpus-wav', next,
       onPrompt: (row, i) => { $('asrPrompt').textContent = `${i + 1}/${rows.length} · ${mode === 'read' ? 'say: ' : 'playing: '}"${row.text}"`; $('asrHeard').textContent = ''; },
       onInterim: t => { $('asrHeard').textContent = `… ${t}`; },
-      onListening: on => { $('status').textContent = on ? (mode === 'read' ? 'listening — say it now' : 'listening') : 'scoring…'; } })) {
+      onListening: on => { $('status').textContent = on ? (mode === 'read' ? 'listening — say it now' : 'listening') : 'scoring…'; },
+      onState: s => line('intent', s, 'recognizer') })) {
       recs.push(r);
       const tr = document.createElement('tr');
       tr.className = !r.final ? 'miss' : r.intent === r.want ? 'same' : 'diff';

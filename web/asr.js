@@ -6,9 +6,9 @@
 //                   hears it (the room is in the loop; stay quiet)
 //   ?asr=read       read: the page shows each line, the user says it
 //
-// One recognition session per row (Chrome sends speechstart once per
-// session). Times are performance.now() ms: in play from the WAV's
-// `playing`, in read from the recognizer's `audiostart`. The transcript
+// One continuous recognition session for the run (Listener). Times are
+// performance.now() ms from the row's start: the WAV's `playing` in play,
+// the reader's "next" in read. The transcript
 // then goes through pass 1 (the harness grammar) for the intent class
 // after ASR — what E2 cares about. WER as E2's: lower case, punctuation
 // off, word Levenshtein over the reference length, no number folding
@@ -54,75 +54,99 @@ export function summarize(recs) {
   return { all: by(), prompt: by('prompt'), heldout: by('heldout') };
 }
 
-// one row: a fresh session; play the WAV once the mic is open (play mode),
-// wait for the final (or the timeout), close the session
-function recognizeOne(SR, row, { mode, processLocally, audioURL, onInterim, onListening }) {
-  return new Promise(resolve => {
-    const rec = new SR();
-    rec.lang = 'en-US'; rec.continuous = false; rec.interimResults = true;
-    if (processLocally) rec.processLocally = true;
-    const out = { t0: null, events: [], final: '', firstInterimMs: null, speechStartMs: null, speechEndMs: null, finalMs: null };
-    const now = () => out.t0 == null ? null : Math.round(performance.now() - out.t0);
-    const ev = (kind, f = {}) => out.events.push({ kind, ms: now(), ...f });
-    let audio = null, done = false, timer = null;
-    const finish = why => {
-      if (done) return;
-      done = true; clearTimeout(timer);
-      onListening?.(false);
-      out.end = why;
-      try { rec.abort(); } catch {}
-      audio?.pause();
-      resolve(out);
-    };
-    const arm = ms => { clearTimeout(timer); timer = setTimeout(() => finish('timeout'), ms); };
-    rec.onaudiostart = () => {
-      ev('audiostart');
-      onListening?.(true);
-      if (mode === 'read') { out.t0 = performance.now(); arm(8000); return; }
+// Listener: ONE continuous recognition session for the whole run, kept
+// alive across Chrome's silence ends (as dialog.js's attachRecognizer).
+// Opening a fresh session per row stalled Chrome after the first row; here
+// a row only routes the results that arrive while it is open. speechstart
+// comes once per session, so a row's onset is its first interim, and its
+// speech end is its last interim (read) or the WAV's end (play).
+class Listener {
+  constructor(SR, { processLocally, onListening, onState }) {
+    this.SR = SR; this.processLocally = processLocally; this.onListening = onListening; this.onState = onState;
+    this.row = null; this.want = false; this.rec = null; this.open = false;
+  }
+  start() {
+    this.want = true;
+    return new Promise(resolve => {
+      const boot = () => {
+        const rec = this.rec = new this.SR();
+        rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = true;
+        if (this.processLocally) rec.processLocally = true;
+        rec.onaudiostart = () => { this.open = true; this.onState?.('mic open'); this.row?.ev('audiostart'); resolve(); };
+        rec.onresult = e => {
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const r = e.results[i];
+            this.row?.result(r[0].transcript, r.isFinal);
+          }
+        };
+        rec.onerror = e => { this.onState?.(`recognizer: ${e.error}`); this.row?.ev('error', { error: e.error }); };
+        rec.onend = () => {
+          this.open = false; this.row?.ev('session_end');
+          if (this.want) setTimeout(() => { if (this.want) try { boot(); } catch (e) { this.onState?.(String(e)); } }, 100);
+        };
+        rec.start();
+      };
+      boot();
+    });
+  }
+  stop() { this.want = false; try { this.rec?.stop(); } catch {} }
+
+  // one row: open it, play the WAV (play) or wait for the reader (read),
+  // close it on its final or its timeout
+  recognize(row, { mode, audioURL, onInterim }) {
+    return new Promise(resolve => {
+      const out = { t0: performance.now(), events: [], final: '', firstInterimMs: null, lastInterimMs: null, finalMs: null };
+      const now = () => Math.round(performance.now() - out.t0);
+      let audio = null, timer = null;
+      const finish = why => {
+        clearTimeout(timer); this.row = null; this.onListening?.(false);
+        out.end = why; audio?.pause(); resolve(out);
+      };
+      const arm = ms => { clearTimeout(timer); timer = setTimeout(() => finish('timeout'), ms); };
+      this.row = {
+        ev: (kind, f = {}) => out.events.push({ kind, ms: now(), ...f }),
+        result: (text, isFinal) => {
+          if (isFinal) {
+            if (!text.trim()) return;
+            out.final = text.trim(); out.finalMs = now(); this.row.ev('final', { text });
+            finish('final');
+          } else {
+            out.firstInterimMs ??= now(); out.lastInterimMs = now(); this.row.ev('interim', { text }); onInterim?.(text);
+            arm(4000); // words are coming: the final follows within the endpointing
+          }
+        },
+      };
+      this.onListening?.(true);
+      if (mode === 'read') { arm(8000); return; }
       audio = new Audio(audioURL);
-      audio.onplaying = () => { out.t0 = performance.now(); ev('playing'); };
-      audio.onended = () => { out.wavEndMs = now(); ev('wav_end'); arm(5000); };
+      audio.onplaying = () => { out.t0 = performance.now(); this.row?.ev('playing'); };
+      audio.onended = () => { out.wavEndMs = now(); this.row?.ev('wav_end'); arm(5000); };
       audio.play().catch(e => { out.error = String(e); finish('play-error'); });
       arm(15000);
-    };
-    rec.onspeechstart = () => { out.speechStartMs ??= now(); ev('speechstart'); };
-    rec.onspeechend = () => { out.speechEndMs ??= now(); ev('speechend'); };
-    rec.onresult = e => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i], text = r[0].transcript;
-        if (r.isFinal) { out.final += (out.final ? ' ' : '') + text.trim(); out.finalMs = now(); ev('final', { text }); }
-        else { out.firstInterimMs ??= now(); ev('interim', { text }); onInterim?.(text); }
-      }
-      if (out.final) finish('final');
-    };
-    rec.onerror = e => { ev('error', { error: e.error }); if (e.error !== 'no-speech') out.error = e.error; };
-    rec.onend = () => finish(out.final ? 'final' : 'ended');
-    // the mic never opened (another recognizer holds it, permission): the row
-    // ends instead of waiting forever
-    arm(6000);
-    try { rec.start(); } catch (e) { out.error = String(e); finish('start-error'); }
-  });
+    });
+  }
 }
 
-// runAsr yields one record per row as it lands. Read mode waits for the
-// page's `next()` between rows (the reader's pace); play mode leaves a gap.
-export async function* runAsr({ SR, rows, mode, processLocally, base, assets, wavBase, next, onPrompt, onInterim, onListening }) {
+export async function* runAsr({ SR, rows, mode, processLocally, base, assets, wavBase, next, onPrompt, onInterim, onListening, onState }) {
+  const L = new Listener(SR, { processLocally, onListening, onState });
+  await L.start();
+  try {
   for (const [i, row] of rows.entries()) {
     onPrompt?.(row, i);
     if (mode === 'read') await next();
-    const r = await recognizeOne(SR, row, { mode, processLocally, audioURL: `${wavBase}/${row.wav}`, onInterim, onListening });
-    // where the speech ended: the WAV's end in play (the recognizer's
-    // speechend lags it by its own endpointing), speechend in read
-    const endMs = mode === 'play' ? r.wavEndMs : r.speechEndMs;
+    const r = await L.recognize(row, { mode, audioURL: `${wavBase}/${row.wav}`, onInterim });
+    // where the speech ended: the WAV's end in play, the last interim in read
+    const endMs = mode === 'play' ? r.wavEndMs : r.lastInterimMs;
     let intent = null, json = null;
     if (r.final) { const p = await twoPass(base, { ...assets, user: r.final }); json = p.json; intent = intentOf(p.json); }
     yield {
       i: i + 1, wav: row.wav, text: row.text, want: row.want, split: row.split, mode,
       final: r.final, wer: wer(row.text, r.final), intent, json,
-      speechStartMs: r.speechStartMs, firstInterimMs: r.firstInterimMs, finalMs: r.finalMs, wavEndMs: r.wavEndMs ?? null,
+      firstInterimMs: r.firstInterimMs, lastInterimMs: r.lastInterimMs, finalMs: r.finalMs, wavEndMs: r.wavEndMs ?? null,
       finalAfterEndMs: r.finalMs != null && endMs != null ? r.finalMs - endMs : null,
       end: r.end, error: r.error ?? null, events: r.events,
     };
     if (mode === 'play') await new Promise(res => setTimeout(res, 600));
   }
+  } finally { L.stop(); }
 }
