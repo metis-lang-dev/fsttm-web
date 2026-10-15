@@ -13,6 +13,8 @@
     "./attention": "./lib/attention.js",
     "./dialog": "./lib/dialog.js",
     "./tts": "./lib/tts.js",
+    "./shell": "./lib/shell.js",
+    "./shell.css": "./lib/shell.css",
     "./fsttm.json": "./lib/fsttm.json",
     "./fixtures/*": "./lib/fixtures/*"
   },
@@ -23,6 +25,6 @@
   "scripts": {
     "build": "npx tailwindcss@3.4.17 -c tailwind.config.cjs -i web/src/input.css -o web/styles.css --minify",
     "watch": "npx tailwindcss@3.4.17 -c tailwind.config.cjs -i web/src/input.css -o web/styles.css --watch",
-    "test": "node test/run.mjs && node test/dialog.mjs"
+    "test": "node test/run.mjs && node test/dialog.mjs && node test/shell.mjs"
   }
 }

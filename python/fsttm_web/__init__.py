@@ -11,6 +11,7 @@ one websocket (fsttm_web.protocol).
     import fsttm_web
     fsttm_web.LIB            # the directory served at /lib/ (the import map's target)
     fsttm_web.WEB            # the reference page
+    fsttm_web.SHELL          # the consoles' shell: lib/shell.css + lib/shell.js
     fsttm_web.asset("dog.gbnf")   # the page's assets/<name>, from their canonical files
     fsttm_web.routes()       # [(url prefix, directory)] for any static server
 
@@ -66,12 +67,15 @@ def routes(page=True):
     return out
 
 
+SHELL = (LIB / "shell.css", LIB / "shell.js")   # the consoles' shell (metis-loop, metis-agent)
+
 IMPORT_MAP = {
     "imports": {
         "fsttm-web/fsttm": "./lib/fsttm.js",
         "fsttm-web/attention": "./lib/attention.js",
         "fsttm-web/dialog": "./lib/dialog.js",
         "fsttm-web/tts": "./lib/tts.js",
+        "fsttm-web/shell": "./lib/shell.js",
     }
 }
 """The import map a page puts in a <script type="importmap"> so its

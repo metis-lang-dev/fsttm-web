@@ -16,7 +16,9 @@ def test_one_source():
     for name, src in [("dog.gbnf", "grammar"), ("dog-prompt.txt", "prompt"), ("dog-corpus.tsv", "test/fixtures")]:
         assert fsttm_web.asset(name).resolve() == (REPO / src / name).resolve()
     assert fsttm_web.routes(page=False) == [("/lib/", fsttm_web.LIB)]
-    assert set(fsttm_web.IMPORT_MAP["imports"]) == {"fsttm-web/fsttm", "fsttm-web/attention", "fsttm-web/dialog", "fsttm-web/tts"}
+    assert set(fsttm_web.IMPORT_MAP["imports"]) == {"fsttm-web/fsttm", "fsttm-web/attention", "fsttm-web/dialog", "fsttm-web/tts",
+                                                     "fsttm-web/shell"}
+    assert all(f.is_file() and f.parent == fsttm_web.LIB for f in fsttm_web.SHELL)
 
 
 def test_echo_backend():

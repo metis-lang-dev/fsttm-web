@@ -25,6 +25,7 @@ open http://localhost:8393/?parity   # the same run in Chrome
 
 ```
 lib/   fsttm.js fsttm.json attention.js dialog.js tts.js  fixtures/   ES modules, no deps
+       shell.css shell.js   the consoles' shell (metis-loop, metis-agent)
 web/   index.html app.js fsmview.js eventtable.js bench.js parity.js  the reference page
        backend/llama.js   the backend adapter over llama-server
 ```
@@ -44,6 +45,28 @@ import { BrowserTTS } from 'fsttm-web/tts';        // speechSynthesis with the h
 
 In a browser without a bundler, an import map points the names at `lib/`
 (see `web/index.html`; `run.sh` serves `lib/` beside the page).
+
+**The consoles' shell** (`lib/shell.css` + `lib/shell.js`, domain-catalog
+s-2a2bc758 step 3): the metis-loop console's top bar (`#band`), its tool
+panels (`.dock`) with the strip that toggles them, the splitter, the colour
+tokens and the catalog rows (`.dlist`) — lifted out of loop_console.html so
+the metis-loop and metis-agent consoles load the same files and read as
+one family. `shell.css` documents the markup; `shell.js` is a classic
+script (the loop console is one artifact page with a plain `<script>`) that
+sets `globalThis.MetisShell`:
+
+```html
+<link rel="stylesheet" href="lib/shell.css">
+<script src="lib/shell.js"></script>
+<script>
+  const ui = MetisShell.docks({names: ["chat", "catalog"], key: "myconsole.docks.v1",
+                               defaults: {chat: {shown: true, open: true}}});
+  MetisShell.splitter();
+</script>
+```
+
+(`import "fsttm-web/shell"` from a module does the same; the CSS is
+`fsttm-web/shell.css`.)
 
 The dialog needs one thing from an LLM side, the **backend adapter**:
 `turn(id, text, mode, {signal})` → an async iterable of sentences
