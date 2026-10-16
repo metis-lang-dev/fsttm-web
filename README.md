@@ -90,7 +90,7 @@ lib/ is packaged twice, from the same files; nothing is copied by hand.
 **JS** (`package.json`, exports as above, `files: lib/`):
 
 ```
-npm install git+https://github.com/metis-lang-dev/fsttm-web.git#<commit>   # the repo is private: needs git auth
+npm install git+https://github.com/metis-lang-dev/fsttm-web.git#<commit>
 npm pack                     # fsttm-web-<version>.tgz; npm install ./fsttm-web-<version>.tgz
 ```
 
