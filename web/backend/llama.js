@@ -1,20 +1,17 @@
 // backend/llama.js — the framework's standalone backend: a plain
-// llama-server (run.sh). The backend adapter (FRAMEWORK §6) on top of the
-// harness's two-pass intent turn (metis-agent internal/llm TwoPass) and the
-// free dialog, over llama-server's /completion. The lower functions are
-// shared by the page and by test/parity.mjs (node), so the parity run is the
-// page's own code path.
+// llama-server (run.sh). The backend adapter on top of a two-pass intent
+// turn (pass 1 the intent JSON under a grammar, pass 2 one spoken line) and
+// the free dialog, over llama-server's /completion.
 //
-// Rendering is the harness's TemplateGemma4, byte for byte:
+// Rendering is Gemma 4's chat template, byte for byte:
 //   <|turn>system\n{system}<turn|>\n<|turn>user\n{user}<turn|>\n<|turn>model\n
 // The system turn is the constant prefix; cache_prompt keeps it in the KV
-// slot, so a turn evaluates only the user tail (llama-server does the
-// prefix reuse the harness does by hand). The BOS comes from the server.
+// slot, so a turn evaluates only the user tail. The BOS comes from the server.
 
 import { splitSentences } from 'fsttm-web/tts';
 
 export const PASS2 = { temperature: 0.4, top_k: 40, n_predict: 50 }; // config.ws.yaml pass2
-const PASS1_MAX = 80;                  // the harness's pass-1 token cap
+const PASS1_MAX = 80;                  // the pass-1 token cap
 const CUE = '\nSpoken response:';      // pass 2: bare continuation (Pass2Turn off)
 const EOT = '<turn|>';
 
@@ -23,12 +20,12 @@ export function renderSystem(system) {
 }
 
 export function renderTurn(system, user) {
-  // the harness trims \r\n from the user text (llm.tail)
+  // the user text trimmed of \r\n
   const u = user.replace(/^[\r\n]+|[\r\n]+$/g, '');
   return `${renderSystem(system)}<|turn>user\n${u}${EOT}\n<|turn>model\n`;
 }
 
-// clean is the harness's LLM.clean: trim, drop thought-channel markup, drop
+// clean: trim, drop thought-channel markup, drop
 // a trailing end-of-turn.
 export function clean(text) {
   let t = dropChannel(text.trim());
@@ -113,12 +110,13 @@ export function intentOf(json) {
   try { return JSON.parse(json).intent ?? '?'; } catch { return '?'; }
 }
 
-// loadAssets reads (by basename: web/assets/ in the page, prompt/ and
-// grammar/ in node) the harness prompt (dog-prompt + the gemma4 pass-2
-// examples, concatenated byte for byte like prompt_extra) and the grammar.
-export async function loadAssets(read) {
-  const [p, x, g] = await Promise.all([
-    read('dog-prompt.txt'), read('pass2-examples-gemma4.txt'), read('dog.gbnf')]);
+// loadAssets reads (by basename: web/assets/ in the page, prompt/ and grammar/
+// in node) the intent turn's system prompt (example-prompt + its pass-2
+// examples, concatenated byte for byte) and its grammar. The example is a
+// desk assistant with a light (LIGHT_ON / LIGHT_OFF / TIME / CHITCHAT /
+// UNKNOWN): an application gives its own.
+export async function loadAssets(read, { prompt = 'example-prompt.txt', examples = 'example-pass2.txt', grammar = 'example.gbnf' } = {}) {
+  const [p, x, g] = await Promise.all([read(prompt), read(examples), read(grammar)]);
   return { system: p + x, gbnf: g };
 }
 
@@ -126,8 +124,8 @@ export async function loadAssets(read) {
 // The intent turn answers in one short ack, too short to talk over. talk is
 // a plain spoken conversation on the same model and slot: no grammar, no
 // JSON, a few sentences, the recent turns as context. It is the page's
-// "replies: long" mode, not a harness path.
-export const TALK_SYSTEM = `You are Nina, a warm, curious and talkative voice assistant, chatting with a person out loud.
+// "replies: long" mode.
+export const TALK_SYSTEM = `You are a warm, curious and talkative voice assistant, chatting with a person out loud.
 Be genuinely helpful: answer what was asked, then add something of your own: an example, a detail, a small story, an opinion, or a question back.
 Keep the conversation going and show interest in the person. Have opinions and a sense of humour; never say you cannot chat.
 Keep it short: two to four natural spoken sentences, no lists, no headings, no markup, no emoji.
@@ -152,7 +150,7 @@ export async function talk(base, { user, history = [], signal, opts = TALK }) {
   return { voice: clean(r.text).replace(/\s*\n+\s*/g, ' '), r };
 }
 
-// ── the backend adapter (FRAMEWORK §6) ─────────────────────────────────────
+// ── the backend adapter ────────────────────────────────────────────────────
 // turn(id, text, mode, {signal}) → async iterable of sentences
 // cut(id, heard)                 → turn id was heard up to heard
 // mode: 'intent' (the two-pass turn: JSON + one ack) | 'talk' (free dialog).

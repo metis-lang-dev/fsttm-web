@@ -1,6 +1,6 @@
-"""The page ↔ backend wire, in Python terms (metis-agent docs/FRAMEWORK.md
-§5; the page side is web/backend/ws.js). JSON text frames on one
-websocket, each an object with `ev`.
+"""The page ↔ backend wire, the library's own protocol, in Python terms (the
+page side is web/backend/ws.js; the README's "The wire"). JSON text frames on
+one websocket, each an object with `ev`.
 
 A backend answers the dialog's turns; everything else is optional and the
 reference page logs what it does not know.
@@ -13,7 +13,6 @@ Page → backend
     cut       {id, heard}          barge-in: turn id was heard up to `heard`
                                    (the backend's history keeps only that)
     heard     {id, text}           a narration id was voiced, this much of it
-    task / say / runtime_intent / rack_mount   the metis-agent harness's extras
 
 Backend → page
     intent     {id, intent, voice}   the answer to an intent turn: intent is
@@ -27,8 +26,11 @@ Backend → page
                                      page voices it when the floor is free
                                      (form R: shown, never voiced)
 
-An application's page may extend the wire (metis-agent's console adds
-hello/journal/catalog/ports/world); the dialog needs only the above.
+An application extends the wire with frames of its own, either way: any other
+`ev` is the application's. The library neither defines nor needs them; the
+reference page logs those it does not know (WsBackend's onFrame), and a page
+sends its own with WsBackend.send(frame). parse() accepts any frame with an
+`ev`, so a backend sees them too. The dialog needs only the above.
 """
 import json
 import re

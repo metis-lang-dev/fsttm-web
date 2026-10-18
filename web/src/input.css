@@ -18,7 +18,7 @@
   .msg { @apply px-2.5 py-1.5 rounded-lg max-w-[85%] text-sm leading-snug break-words; }
   .msg small { @apply block text-[10px] font-mono text-slate-500; }
   .msg.user { @apply self-end ml-auto bg-sky-950 text-sky-100; }
-  .msg.nina { @apply bg-emerald-950 text-emerald-100; }
+  .msg.agent { @apply bg-emerald-950 text-emerald-100; }
   .msg.intent { @apply bg-slate-800 text-slate-300 font-mono text-[11px]; }
   .msg.narr { @apply bg-violet-950/60 text-violet-200 text-[13px]; }
   .msg.cut { @apply bg-transparent text-amber-300 font-mono text-[11px] px-0 py-0; }

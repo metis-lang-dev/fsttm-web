@@ -1,7 +1,5 @@
 // node test/run.mjs — the floor machine and the attention layer against
-// their fixtures (lib/fsttm.json, lib/fixtures/). These are canonical: they
-// came from metis-agent go/internal/{fsm,attention}/testdata, whose Go
-// machines were removed in agent-framework iteration 3; no drift check is left.
+// their fixtures (lib/fsttm.json, lib/fixtures/), which are canonical.
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

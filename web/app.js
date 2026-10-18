@@ -1,11 +1,10 @@
 // app.js — the page: the dialog (the floor machine over SpeechRecognition +
 // speechSynthesis) with its state on view — the floor diagram, the turn
 // timings, the numbers and the event log, laid out as the Python TUI's
-// panels; ?selftest (the §3 table in this Chrome + what this Chrome
-// offers), ?parity (the 54-row intent corpus, step 1).
+// panels; ?selftest (the event table in this Chrome + what this Chrome
+// offers).
 import { loadAssets, LlamaBackend } from './backend/llama.js';
 import { connect } from './backend/ws.js';
-import { parseCorpus, parseRef, runParity, summarize } from './parity.js';
 import { FSTTM } from 'fsttm-web/fsttm';
 import { Attention } from 'fsttm-web/attention';
 import { Dialog, attachRecognizer } from 'fsttm-web/dialog';
@@ -38,24 +37,23 @@ function line(who, text, meta) {
 }
 
 // ── replies: long = free conversation (several sentences, to talk over);
-// short = the intent turn (JSON + one ack), the harness's path ───────────
+// short = the intent turn (JSON + one ack) ───────────
 let longReplies = q.get('reply') !== 'short';
 const showReplies = () => { $('replyBtn').textContent = `replies: ${longReplies ? 'long' : 'short'}`; };
 $('replyBtn').onclick = () => { longReplies = !longReplies; showReplies(); };
 showReplies();
 
-// the backend adapter (metis-agent FRAMEWORK §6): turn(id, text, mode) →
-// sentences, cut(id, heard). Served by metis-agent, the page talks to it
-// over /ws (backend/ws.js); served by llama-server, to /completion
-// (backend/llama.js). ?backend=llama|ws forces one.
+// the backend adapter: turn(id, text, mode) → sentences, cut(id, heard).
+// Served by a backend that speaks the library's wire on /ws (fsttm_web.protocol;
+// examples/serve.py is one), the page talks to it (backend/ws.js); served by
+// llama-server, to /completion (backend/llama.js). ?backend=llama|ws forces one.
 const want = q.get('backend');
 const wsURL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 let onAgentFrame = () => {}; // set below, once the panes exist
 const agentWs = want === 'llama' ? null : await connect(wsURL, { onFrame: f => onAgentFrame(f) });
-if (want === 'ws' && !agentWs) throw new Error(`no metis-agent at ${wsURL}`);
+if (want === 'ws' && !agentWs) throw new Error(`no backend at ${wsURL}`);
 const backend = agentWs ?? new LlamaBackend({ base, assets });
-const backendName = agentWs ? 'metis-agent (ws)' : 'llama-server';
-let domains = [];
+const backendName = agentWs ? 'ws' : 'llama-server';
 async function llm(text, { signal, id }) {
   $('status').textContent = 'thinking…';
   const sentences = [];
@@ -68,13 +66,14 @@ async function llm(text, { signal, id }) {
 // adds the recognizer ────────────────────────────────────────────────────
 const fsm = new FsmView($('fsm'));
 const fsttm = new FSTTM(table);
-const attention = new Attention({ wakeWords: ['nina', 'hey nina', 'hello nina'],
+// the wake words: ?wake=a,b (the library's neutral DEFAULT_WAKE otherwise)
+const attention = new Attention({ wakeWords: q.get('wake')?.split(',').map(w => w.trim()).filter(Boolean),
   sleepPhrases: ['go to sleep', 'voice off', 'stop listening', "that's all"], startAsleep: q.has('asleep') });
 const tts = new BrowserTTS();
 const turns = [];
-// narrations voiced (the rest are shown): what was said out loud before the
-// rack, at quiescence and surprises (RAG §8.4: per-clause talk was the
-// cost); ?narrate=all voices every one, ?narrate=none none
+// narrations voiced (the rest are shown): the kinds a backend says out loud
+// (surprises, results, notices, quiescence …); ?narrate=all voices every one,
+// ?narrate=none none
 const narrateMode = q.get('narrate') ?? 'default';
 const VOICED = new Set(['surprise', 'notice', 'result', 'quiescence', 'task', 'announce', 'reading']);
 const trail = []; // the last floor states, {state, t}: a short state is seen here
@@ -92,12 +91,13 @@ const dialog = new Dialog({ fsttm, attention, tts, bargeIn, log: bench.log, llm,
   // a narration's id is n:<agent id>: what was heard of it goes back as heard{id, text}
   onHeard: (id, heard) => id.startsWith('n:') ? agentWs?.heard(id.slice(2), heard) : backend.cut(id, heard),
   onTurn: r => { if (r.json) line('intent', r.json, 'intent'); } });
-window.fsttmDialog = dialog; // for CDP drivers (the cut bench, E5)
+window.fsttmDialog = dialog; // for CDP drivers (a cut bench)
 window.fsttmBench = bench;
 window.fsttmBackend = backend;
 
-// ── metis-agent's frames: narrations voiced floor permitting (say() parks
-// them while the user holds the floor or she sleeps), the rest logged ────
+// ── the backend's own frames: narrations voiced floor permitting (say() parks
+// them while the user holds the floor or she sleeps); any other ev (an
+// application's extension of the wire) logged ──────────────────────────────
 onAgentFrame = f => {
   // a frame's own kind (narration, runtime) is logged as `of`: bench.log's kind is the frame's ev
   const { ev, t, kind, ...rest } = f;
@@ -111,9 +111,7 @@ onAgentFrame = f => {
     if (voice && text) dialog.say(splitSentences(text), 'narration', `n:${f.id}`);
     return;
   }
-  if (ev === 'domains') { domains = f.domains ?? []; scheduleStats(); }
-  if (ev === 'command') line('narr', `${f.name} ${JSON.stringify(f.args ?? {})}`, `command ${f.id}`);
-  bench.log(ev === 'rack' ? 'rack' : ev, ev === 'rack' ? { last: f.last, paths: (f.paths ?? []).length } : rest);
+  bench.log(ev, rest);
 };
 $('bargeSel').value = bargeIn;
 $('bargeSel').onchange = () => { dialog.bargeIn = $('bargeSel').value; bench.log('policy', { bargeIn: dialog.bargeIn }); };
@@ -121,13 +119,13 @@ $('bargeSel').onchange = () => { dialog.bargeIn = $('bargeSel').value; bench.log
 function onEvent(e) {
   switch (e.kind) {
     case 'final': if (e.text) line('user', e.text, `final · ${e.state}`); break;
-    case 'speak': line('nina', e.sentences.join(' '), e.why); break;
+    case 'speak': line('agent', e.sentences.join(' '), e.why); break;
     case 'cut': line('cut', `[interrupted · ${e.why}] heard: "${e.heard ?? ''}"`,
       `onset→cut ${e.onsetToCutMs != null ? Math.round(e.onsetToCutMs) + ' ms' : '—'}${e.estimated ? ' · heard estimated' : ''}` +
       (e.rest ? ` · unsaid, out of the context until "continue": "${e.rest}"` : '')); break;
     case 'resume': line('cut', `resuming (${e.why}) from the cut word`); break;
     case 'fsttm': trail.push({ state: e.dst, t: e.t }); if (trail.length > 7) trail.shift(); break;
-    case 'attention': if (e.action === 'ignore') line('cut', 'ignored: asleep — say "nina …", flip the switch, or type'); break;
+    case 'attention': if (e.action === 'ignore') line('cut', `ignored: asleep — say "${attention.wake.at(-1)} …", flip the switch, or type`); break;
     case 'echo': if (e.final) line('cut', `dropped as her own echo: "${e.text}"`); break;
     case 'keyword_stop': line('cut', `stop: "${e.text}"`); break;
     case 'llm': $('status').textContent = `reply ${Math.round(e.ms)} ms`; break;
@@ -221,7 +219,6 @@ function renderStats() {
     ['recognizer', recCtl ? (recognition.processLocally ? 'on-device' : 'cloud') : 'off'],
     ['tts heard', tts.boundaries ? 'word boundaries' : 'estimated by time'],
     ['backend', backendName],
-    ...(agentWs ? [['domains', domains.length ? domains.map(d => `${d.display || d.path} (${d.state})`).join(', ') : 'none']] : []),
     ['', ''],
     ['turns', turns.length],
     ['barge-ins', `${m.cuts}${m.cuts ? ' · ' + Object.entries(m.byPolicy).map(([k, v]) => `${k} ${v}`).join(', ') : ''}`],
@@ -259,7 +256,7 @@ async function micOn() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { line('error', 'no SpeechRecognition in this browser'); return; }
   if (!recognition.api) bench.log('recognition', await probeLocal(SR));
-  // pressing mic is mic possession: awake at once, like the harness's
+  // pressing mic is mic possession: awake at once, as a push-to-talk button
   // ForceAttention (?asleep keeps the wake-word start)
   if (!q.has('asleep') && attention.force(true)) bench.log('attention', { state: 'AWAKE', forced: 'mic' });
   const rec = new SR();
@@ -284,7 +281,7 @@ $('attnSwitch').onchange = () => {
   showState();
 };
 
-// probeLocal: on-device recognition for en-US (DESIGN.md §6) — what this
+// probeLocal: on-device recognition for en-US — what this
 // Chrome says, and install() when it says downloadable
 async function probeLocal(SR) {
   const out = { api: !!SR, available: typeof SR?.available === 'function' };
@@ -315,7 +312,7 @@ $('saveBench').onclick = () => {
 showState(); renderStats();
 $('status').textContent = 'ready';
 
-// ── ?selftest: the §3 table in this Chrome + what this Chrome offers ─────
+// ── ?selftest: the event table in this Chrome + what this Chrome offers ─────
 if (q.has('selftest')) {
   $('mode').textContent = 'selftest';
   const rows = await runEventTable(table);
@@ -341,107 +338,4 @@ if (q.has('selftest')) {
   for (const r of rows) line(r.pass ? 'intent' : 'error', `${r.pass ? 'ok' : 'FAIL'} [${r.policy}] ${r.signal} → ${r.action}`, `got: ${r.got}`);
   line('intent', JSON.stringify(caps), 'this Chrome');
   $('status').textContent = `selftest ${rows.filter(r => r.pass).length}/${rows.length}`;
-}
-
-// ── ?parity (step 1) ─────────────────────────────────────────────────────
-if (q.has('parity')) {
-  $('mode').textContent = 'parity';
-  $('parity').hidden = false;
-  const rows = parseCorpus(await get('dog-corpus.tsv'));
-  const ref = parseRef(await get('harness-e2b.jsonl'));
-  const recs = [];
-  for await (const r of runParity(base, assets, rows, ref)) {
-    recs.push(r);
-    const tr = document.createElement('tr');
-    tr.className = r.class ? (r.same ? 'same' : 'diff') : 'miss';
-    for (const v of [r.class ? (r.same ? '=' : '≠') : '✗', r.utt, r.want, r.got, r.firstMs, r.p1PromptN, r.json, r.voice]) {
-      const td = document.createElement('td'); td.className = 'cell'; td.textContent = v; tr.append(td);
-    }
-    if (r.same === false) tr.title = `harness: ${r.harnessJson}`;
-    append($('parityRows'), tr, 1000);
-    $('status').textContent = `parity ${recs.length}/${rows.length}`;
-  }
-  const s = summarize(recs);
-  $('paritySum').textContent = `intent class ${s.classOK}/${s.n} · pass-1 JSON identical to the harness ${s.same}/${s.n} · ` +
-    `first token p50 ${s.firstP50} ms, p90 ${s.firstP90} ms · prompt tokens evaluated: row 1 ${s.p1PromptNFirst}, later rows max ${s.p1PromptNMax}`;
-  document.body.dataset.parity = JSON.stringify(s);
-  $('status').textContent = 'parity done';
-}
-
-// ── ?asr (step 4, E5): the recognizer on the E2 corpus through the real mic
-// — ?asr plays each WAV on the speakers, ?asr=read shows the line for the
-// user to say; WER, latency and the intent after ASR per row ─────────────
-if (q.has('asr')) {
-  const { parseManifest, runAsr, summarize: asrSum, Listener } = await import('./asr.js');
-  const mode = q.get('asr') === 'read' ? 'read' : 'play';
-  $('mode').textContent = `asr · ${mode}`;
-  $('asr').hidden = false;
-  // one recognizer at a time in Chrome: the bench owns the mic, the dialog's is off
-  // the header's mic opens the bench's own recognizer (one continuous session)
-  if (recCtl) micOff();
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  // cloud unless ?asr…&local (on-device is not required; install() can wait on a download)
-  let caps = null;
-  const listening = on => { $('status').textContent = on ? (mode === 'read' ? 'listening — say it now' : 'listening') : 'scoring…'; };
-  const recState = s => { line('intent', s, 'recognizer'); if (s === 'mic open') micShown(true); };
-  const micShown = on => {
-    $('micBtn').textContent = on ? 'mic on (asr)' : 'mic off (asr)';
-    $('micDot').className = `inline-block w-2.5 h-2.5 rounded-full ${on ? 'bg-emerald-400' : 'bg-slate-700'}`;
-  };
-  let listener = null;
-  const openMic = async () => {
-    if (listener?.want) return listener.start();
-    if (!SR) { line('error', 'no SpeechRecognition in this browser'); return; }
-    caps ??= q.has('local') ? await probeLocal(SR) : { api: true, processLocally: false, note: 'cloud (default; &local tries on-device)' };
-    listener = new Listener(SR, { processLocally: caps.processLocally, onListening: listening, onState: recState });
-    $('micBtn').textContent = 'mic opening…';
-    await listener.start();
-  };
-  micShown(false);
-  $('micBtn').onclick = () => { if (listener?.want) { listener.stop(); listener = null; micShown(false); } else openMic(); };
-  let rows = parseManifest(await get('corpus-wav/manifest.tsv'));
-  if (q.get('only')) { const keep = new Set(q.get('only').split(',')); rows = rows.filter(r => keep.has(r.split) || keep.has(r.wav)); }
-  const recs = [];
-  let nextRes = null;
-  const next = () => new Promise(res => { nextRes = res; $('asrNext').hidden = false; });
-  const go = () => { if (nextRes) { const r = nextRes; nextRes = null; $('asrNext').hidden = true; r(); } };
-  $('asrNext').onclick = go;
-  document.addEventListener('keydown', e => { if (e.code === 'Space' && nextRes) { e.preventDefault(); go(); } });
-  const show = () => {
-    const s = asrSum(recs).all;
-    $('asrSum').textContent = `${recs.length}/${rows.length} · ${caps?.processLocally ? 'on-device' : 'cloud'} · WER mean ${s.werMean ?? '—'} · exact ${s.exact}/${s.n} · ` +
-      `intent ${s.intentOK}/${s.n} · first interim p50 ${s.firstInterimP50 ?? '—'} ms · final after speech end p50 ${s.finalAfterEndP50 ?? '—'} / p90 ${s.finalAfterEndP90 ?? '—'} ms`;
-  };
-  $('asrSave').onclick = () => {
-    const a = document.createElement('a');
-    const body = [{ kind: 'caps', mode, userAgent: navigator.userAgent, recognition: caps }, ...recs, { kind: 'summary', mode, ...asrSum(recs) }];
-    a.href = URL.createObjectURL(new Blob([body.map(r => JSON.stringify(r)).join('\n') + '\n'], { type: 'application/jsonl' }));
-    a.download = `fsttm-asr-${mode}-${Date.now()}.jsonl`;
-    a.click();
-  };
-  $('asrPrompt').textContent = mode === 'read' ? 'mic (top right) → wait for "mic open" → start → for each line: space (or "next line"), then say it' : 'press start and stay quiet: the speakers play 54 commands';
-  $('status').textContent = 'asr ready';
-  $('asrStart').onclick = async () => {
-    $('asrStart').disabled = true;
-    await openMic();
-    if (!listener) return;
-    line('intent', JSON.stringify(caps), 'recognition');
-    for await (const r of runAsr({ SR, rows, mode, processLocally: caps.processLocally, base, assets, wavBase: 'assets/corpus-wav', next, listener,
-      onPrompt: (row, i) => { $('asrPrompt').textContent = `${i + 1}/${rows.length} · ${mode === 'read' ? 'say: ' : 'playing: '}"${row.text}"`; $('asrHeard').textContent = ''; },
-      onInterim: t => { $('asrHeard').textContent = `… ${t}`; },
-      onListening: listening, onState: recState })) {
-      recs.push(r);
-      const tr = document.createElement('tr');
-      tr.className = !r.final ? 'miss' : r.intent === r.want ? 'same' : 'diff';
-      for (const v of [r.intent === r.want ? '=' : '≠', r.text, r.final || `(${r.end}${r.error ? ' ' + r.error : ''})`, r.wer.toFixed(2), r.want, r.intent ?? '—',
-        r.firstInterimMs ?? '—', r.finalAfterEndMs ?? '—', r.split]) {
-        const td = document.createElement('td'); td.className = 'cell'; td.textContent = v; tr.append(td);
-      }
-      append($('asrRows'), tr, 1000);
-      show();
-    }
-    $('asrPrompt').textContent = 'done: save (JSONL) and send me the file';
-    document.body.dataset.asr = JSON.stringify(asrSum(recs));
-    $('status').textContent = 'asr done';
-  };
 }

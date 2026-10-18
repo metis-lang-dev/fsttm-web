@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fsttm-web</title>
-<!-- Tailwind, built as metis-loop's nina-web does: npm run build (src/input.css → styles.css) -->
+<!-- Tailwind, no bundler: npm run build (src/input.css → styles.css) -->
 <link rel="stylesheet" href="styles.css">
 </head>
 <body class="h-full bg-slate-950 text-slate-200 font-sans antialiased">
@@ -26,7 +26,7 @@
     </label>
     <div class="ml-auto flex flex-wrap items-center gap-2">
       <button id="replyBtn" type="button" class="btn" title="long: free conversation, several sentences · short: the intent turn (JSON + one ack)">replies: long</button>
-      <select id="bargeSel" class="btn bg-slate-900" title="barge-in policy (DESIGN.md §4)">
+      <select id="bargeSel" class="btn bg-slate-900" title="barge-in policy (README: Design)">
         <option value="words">barge-in: words</option>
         <option value="energy">barge-in: energy</option>
         <option value="none">barge-in: none</option>
@@ -42,7 +42,7 @@
     <div class="md:col-span-3 flex flex-col gap-3 md:min-h-0">
       <section class="panel md:flex-[2] min-h-[22rem] md:min-h-0">
         <div class="panel-head"><span class="text-cyan-300">chat</span>
-          <span class="panel-note">you = final transcript · nina = what was spoken · amber = cuts and drops</span></div>
+          <span class="panel-note">you = final transcript · agent = what was spoken · amber = cuts and drops</span></div>
         <div id="chat" class="scroll space-y-1.5" aria-live="polite"></div>
         <form id="chatForm" class="mt-2 flex gap-2">
           <input id="chatInput" type="text" autocomplete="off" autofocus placeholder="type to her (spoken back; no mic needed)"
@@ -87,40 +87,11 @@
       </section>
     </div>
 
-    <!-- ?parity (step 1) -->
-    <section id="parity" hidden class="panel md:col-span-5 min-h-[16rem]">
-      <div class="panel-head"><span class="text-amber-300">parity</span><span id="paritySum" class="panel-note"></span></div>
-      <div class="scroll">
-        <table class="w-full text-[11px] font-mono"><thead class="text-slate-500 text-left sticky top-0 bg-slate-900"><tr>
-          <th class="cell"></th><th class="cell">utterance</th><th class="cell">want</th><th class="cell">got</th><th class="cell">first ms</th>
-          <th class="cell">eval tok</th><th class="cell">JSON</th><th class="cell">voice</th></tr></thead>
-        <tbody id="parityRows"></tbody></table>
-      </div>
-    </section>
-    <!-- ?asr (step 4, E5): Chrome's recognizer on the E2 corpus, through the real mic -->
-    <section id="asr" hidden class="panel md:col-span-5 min-h-[16rem]">
-      <div class="panel-head"><span class="text-amber-300">asr</span><span id="asrSum" class="panel-note"></span></div>
-      <div class="flex flex-wrap items-center gap-2 text-[11px] font-mono px-1 pb-2">
-        <button id="asrStart" type="button" class="btn">start</button>
-        <button id="asrNext" type="button" class="btn" hidden>next line (space)</button>
-        <button id="asrSave" type="button" class="link">save (JSONL)</button>
-        <b id="asrPrompt" class="text-cyan-300 text-sm"></b>
-        <span id="asrHeard" class="text-slate-400"></span>
-      </div>
-      <div class="scroll">
-        <table class="w-full text-[11px] font-mono"><thead class="text-slate-500 text-left sticky top-0 bg-slate-900"><tr>
-          <th class="cell"></th><th class="cell">said</th><th class="cell">heard</th><th class="cell">WER</th><th class="cell">want</th><th class="cell">got</th>
-          <th class="cell">first interim</th><th class="cell">final after end</th><th class="cell">split</th></tr></thead>
-        <tbody id="asrRows"></tbody></table>
-      </div>
-    </section>
   </main>
 
   <p class="text-[11px] text-slate-500 shrink-0">
     <b>mic</b> starts the dialog and wakes her (<code>?asleep</code>: wake word first). Talk over her to barge in; "stop" cuts at once.
-    <code>?reply=short</code> starts in the intent mode. <a class="underline" href="?selftest">?selftest</a> runs the §3 event table in this Chrome;
-    <a class="underline" href="?parity">?parity</a> the 54-row intent corpus;
-    <a class="underline" href="?asr">?asr</a> / <a class="underline" href="?asr=read">?asr=read</a> the recognizer on the E2 corpus (played on the speakers / read by you).</p>
+    <code>?reply=short</code> starts in the intent mode; <code>?wake=a,b</code> sets the wake words. <a class="underline" href="?selftest">?selftest</a> runs the event table in this Chrome.</p>
 </div>
 <!-- the framework's modules by their package names (package.json "exports"); run.sh serves lib/ as lib/ -->
 <script type="importmap">

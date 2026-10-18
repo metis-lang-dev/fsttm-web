@@ -1,26 +1,22 @@
 #!/usr/bin/env bash
-# run.sh — the whole backend (DESIGN.md §2): llama-server from the pinned
-# llama.cpp checkout with gemma4 E2B Q4, serving the page from web/.
+# run.sh — the reference page on a plain llama-server: the example intent turn
+# (prompt/, grammar/) and the free dialog, with a Gemma 4 GGUF.
 #
-#   ./run.sh                 # http://localhost:8393
-#   PORT=8394 ./run.sh       # elsewhere
-#   MODEL=<gguf> ./run.sh    # another model (the parity bar is on E2B Q4)
+#   MODEL=<gguf> ./run.sh            # http://localhost:8393
+#   PORT=8394 MODEL=<gguf> ./run.sh  # elsewhere
+#   LLAMA=<dir of llama-server>      # else llama-server on PATH
 set -euo pipefail
 cd "$(dirname "$0")"
-LLAMA=${LLAMA:-$HOME/archive/vox/llama.cpp/build/bin}
-MODEL=${MODEL:-$HOME/repo/perotheia-packages/metis-agent/go/models/gemma4/gemma-4-E2B-it-Q4_K_M.gguf}
+MODEL=${MODEL:?a Gemma 4 GGUF: MODEL=<path.gguf> ./run.sh}
+SERVER="${LLAMA:+$LLAMA/}llama-server"
 PORT=${PORT:-8393}
 # llama-server serves nothing outside --path (symlinks get 403): the page's
-# assets are copied from prompt/ grammar/ test/fixtures/ (the canonical
-# files) into web/assets/, and lib/ into web/lib/ (both gitignored), at every start.
+# assets are copied from prompt/ and grammar/ (the canonical files) into
+# web/assets/, and lib/ into web/lib/ (both gitignored), at every start.
 rm -rf web/assets web/lib && mkdir -p web/assets
-cp prompt/*.txt grammar/dog.gbnf test/fixtures/dog-corpus.tsv test/fixtures/harness-e2b.jsonl web/assets/
-# ?asr (E5): the E2 corpus, WAVs + manifest, from metis-agent
-WAVS=${WAVS:-$HOME/repo/perotheia-packages/metis-agent/go/models/corpus-wav}
-[ -d "$WAVS" ] && cp -r "$WAVS" web/assets/corpus-wav
+cp prompt/*.txt grammar/*.gbnf web/assets/
 # the library (lib/, the framework's exportable part) is served beside the page
 cp -r lib web/lib
-# -c 4096 and -b 512 as the harness (config.ws.yaml); one slot = one dialog,
-# so the KV prefix (the system turn) stays cached between turns.
-exec "$LLAMA/llama-server" -m "$MODEL" -ngl 99 -c 4096 -b 512 -np 1 \
+# one slot = one dialog, so the KV prefix (the system turn) stays cached between turns
+exec "$SERVER" -m "$MODEL" -ngl 99 -c 4096 -b 512 -np 1 \
   --path web --host 127.0.0.1 --port "$PORT" "$@"

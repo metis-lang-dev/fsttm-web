@@ -1,14 +1,14 @@
-// backend/ws.js — the backend adapter over metis-agent's wire (metis-agent
-// docs/FRAMEWORK.md §5): the same turn(id, text, mode) → sentences and
-// cut(id, heard) as backend/llama.js, over one websocket. The agent owns
-// the model, the dialog history (talk) and the domains; it also sends what
-// it would say unsolicited (narration{…}) and its panes' rows (runtime,
-// rack, command, pending, domains), handed to onFrame.
+// backend/ws.js — the backend adapter over the library's wire (fsttm_web.protocol;
+// the README's "The wire"): the same turn(id, text, mode) → sentences and
+// cut(id, heard) as backend/llama.js, over one websocket. The backend owns the
+// model and the dialog history (talk); it may also send what it would say
+// unsolicited (narration{…}). Every frame that is not a turn's answer — an
+// application's own extension of the wire — goes to onFrame; send(frame) is the
+// hook for the page's own frames the other way.
 //
-//   → backend  say_text{id,text,mode} · cut{id,heard} · heard{id,text} · task{id,result,detail} · say{text}
-//              runtime_intent{text} · rack_mount{text,state}
+//   → backend  say_text{id,text,mode} · cut{id,heard} · heard{id,text} · (an application's own)
 //   ← page     intent{id,intent,voice,…} · talk{id,text,done} · error{id,error}
-//              narration{id,path,kind,form,line,sentence} · runtime · rack · command · pending · domains
+//              narration{id,path,kind,form,line,sentence} · (an application's own)
 
 import { splitSentences } from 'fsttm-web/tts';
 
@@ -25,7 +25,7 @@ export class WsBackend {
     this.sess = Math.random().toString(36).slice(2, 8);
     this.opened = new Promise((res, rej) => {
       this.ws.onopen = () => res(this);
-      this.ws.onerror = () => rej(new Error(`ws ${url}: no metis-agent`));
+      this.ws.onerror = () => rej(new Error(`ws ${url}: no backend`));
     });
     this.ws.onmessage = e => {
       let f;
@@ -81,13 +81,10 @@ export class WsBackend {
   cut(id, heard) { this.send({ ev: 'cut', id: this.wire(id), heard }); }
   // heard: the page voiced the agent's narration id, this much of it
   heard(id, text) { this.send({ ev: 'heard', id, text }); }
-  task(id, result, detail = '') { this.send({ ev: 'task', id, result, detail }); }
-  say(text) { this.send({ ev: 'say', text }); }
-  runtimeIntent(text) { this.send({ ev: 'runtime_intent', text }); }
   close() { this.ws.close(); }
 
-  // intent is one intent turn whole, for the parity run: the JSON as the
-  // agent's pass 1 wrote it, the voice, the timings
+  // intent is one intent turn whole: the JSON as the backend's pass 1 wrote it,
+  // the voice, the timings
   async intent(id, text) {
     const sentences = [];
     for await (const s of this.turn(id, text, 'intent')) sentences.push(s);
@@ -96,7 +93,7 @@ export class WsBackend {
   }
 }
 
-// connect resolves a WsBackend when a metis-agent answers on url within
+// connect resolves a WsBackend when a backend answers on url within
 // timeoutMs, else null (the page then runs on llama-server).
 export async function connect(url, { timeoutMs = 1500, ...opts } = {}) {
   let b;

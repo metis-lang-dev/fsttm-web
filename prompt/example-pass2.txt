@@ -1,0 +1,9 @@
+
+## Spoken response (after the JSON)
+After the JSON comes "Spoken response:" and one short sentence you say out
+loud, in the first person. It is never JSON and never an intent name.
+When you cannot do something, say so plainly.
+"switch the lamp on" → {"intent":"LIGHT_ON"}
+Spoken response: Light's on.
+"order me a pizza" → {"intent":"UNKNOWN"}
+Spoken response: I can't do that, sorry.

@@ -11,20 +11,20 @@ one websocket (fsttm_web.protocol).
     import fsttm_web
     fsttm_web.LIB            # the directory served at /lib/ (the import map's target)
     fsttm_web.WEB            # the reference page
-    fsttm_web.asset("dog.gbnf")   # the page's assets/<name>, from their canonical files
+    fsttm_web.asset("example.gbnf")   # the page's assets/<name>, from their canonical files
     fsttm_web.routes()       # [(url prefix, directory)] for any static server
 
     from fsttm_web.aiohttp import mount     # pip install fsttm-web[aiohttp]
     mount(app)                               # /lib/, /assets/, and the reference page at /
 
 One source: an installed wheel carries copies made at build time (lib/,
-web/, prompt/, grammar/, test/fixtures/); an editable install
+web/, prompt/, grammar/); an editable install
 (`pip install -e fsttm-web`) reads them from the checkout. Nothing is
 copied by hand.
 """
 from pathlib import Path
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 _PKG = Path(__file__).resolve().parent
 
@@ -42,11 +42,11 @@ def _root():
 ROOT = _root()
 LIB = (ROOT or _PKG) / "lib"
 WEB = (ROOT or _PKG) / "web"
-_ASSET_DIRS = ([ROOT / "prompt", ROOT / "grammar", ROOT / "test" / "fixtures"] if ROOT else
-               [_PKG / "assets" / d for d in ("prompt", "grammar", "fixtures")])
+_ASSET_DIRS = ([ROOT / "prompt", ROOT / "grammar"] if ROOT else
+               [_PKG / "assets" / d for d in ("prompt", "grammar")])
 
-# the reference page's assets/<name> (web/backend/llama.js loadAssets, the
-# ?parity corpus): canonical files in prompt/, grammar/, test/fixtures/
+# the reference page's assets/<name> (web/backend/llama.js loadAssets: the
+# example intent turn's prompt and grammar): canonical files in prompt/, grammar/
 ASSETS = {p.name: p for d in _ASSET_DIRS if d.is_dir() for p in sorted(d.iterdir()) if p.is_file()}
 
 

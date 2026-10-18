@@ -1,5 +1,5 @@
 {
- "about": "metis-agent fsm_test.go + paper_test.go as data: both FSTTMs (Go, fsttm-web/web/fsttm.js) run these. 'at' is reached from boot by setup[at] (legal steps only).",
+ "about": "The floor machine's cases as data (the transitions and the paper's examples): any FSTTM interpreter of fsttm.json runs them (lib/fsttm.js does, test/run.mjs). 'at' is reached from boot by setup[at] (legal steps only).",
  "setup": {
   "FREEu": [],
   "USER": [

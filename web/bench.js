@@ -1,5 +1,5 @@
 // bench.js — every dialog event with performance.now(), exportable as
-// JSONL (?bench), and the §4 metrics computed from them: onset→cut
+// JSONL (?bench), and the barge-in metrics computed from them: onset→cut
 // latency, false cuts, echo drops, user words lost at the cut, FREEu
 // dwell, LLM first-token and first-sentence times.
 

@@ -1,87 +1,85 @@
 # fsttm-web
 
-The FSTTM floor machine in Chrome over a plain llama-server (design:
-[DESIGN.md](DESIGN.md)). Step 1: the skeleton and intent parity with the
-metis-agent harness.
+A dialog framework for the browser: the FSTTM floor machine (N09-1071, the
+finite-state turn-taking model) over Chrome's SpeechRecognition and
+speechSynthesis, with wake/sleep attention, barge-in, textual echo
+rejection and the heard-text cut. ES modules with no dependencies (`lib/`),
+the same library as a Python package (`fsttm_web`) for a Python web server,
+one page↔backend wire, and a reference page (`web/`) over a plain
+llama-server.
+
+Used by: metis-agent's console.
 
 ![fsttm-web: a free dialog with three barge-ins](docs/fsttm-web.png)
 
-A live session: the chat (left) shows three replies cut by talking over
-her, each with what was heard and the unsaid rest kept out of the context;
-the turns table times each one (first token ~40 ms, reply ~0.3-0.6 s,
-onset→cut 130-470 ms). On the right, the floor machine as the Python TUI
-draws it (current state green, previous blue, the trail of states with
-their dwell), the state and perf numbers, and the event log.
+## The library (lib/)
 
 ```
-./run.sh                         # llama-server, gemma4 E2B Q4, page on http://localhost:8393
-node test/run.mjs                # the floor machine and attention on their fixtures (83)
-node test/dialog.mjs             # the §3 event table (22 rows)
-node test/parity.mjs             # the 54-row corpus through the page's backend, vs the harness
-open http://localhost:8393/?parity   # the same run in Chrome
+lib/   fsttm.js fsttm.json   the floor machine and its table (the machine as data)
+       attention.js          wake / sleep in front of the floor
+       dialog.js             browser signals → floor actions: barge-in, echo rejection, the heard-text cut, resume
+       tts.js                speechSynthesis with the text actually heard
+       fixtures/             the floor machine's and attention's cases as data (canonical)
 ```
-
-## The framework (lib/) and the reference page (web/)
-
-```
-lib/   fsttm.js fsttm.json attention.js dialog.js tts.js  fixtures/   ES modules, no deps
-web/   index.html app.js fsmview.js eventtable.js bench.js parity.js  the reference page
-       backend/llama.js   the backend adapter over llama-server
-```
-
-`lib/fsttm.json` and `lib/fixtures/` are the canonical floor machine and
-its fixtures (they came from metis-agent's Go `fsm` and `attention`,
-removed when the dialog moved to the browser).
-
-Another application imports the library by its package exports:
 
 ```js
-import { FSTTM } from 'fsttm-web/fsttm';           // the floor machine (table: fsttm-web/fsttm.json)
-import { Attention } from 'fsttm-web/attention';   // wake / sleep
-import { Dialog, attachRecognizer } from 'fsttm-web/dialog'; // barge-in, echo rejection, the heard-text cut, resume
-import { BrowserTTS } from 'fsttm-web/tts';        // speechSynthesis with the heard text
+import { FSTTM } from 'fsttm-web/fsttm';                  // the floor machine (table: fsttm-web/fsttm.json)
+import { Attention } from 'fsttm-web/attention';          // wake / sleep: new Attention({ wakeWords, sleepPhrases, enabled, startAsleep })
+import { Dialog, attachRecognizer } from 'fsttm-web/dialog';
+import { BrowserTTS, splitSentences } from 'fsttm-web/tts';
 ```
 
 In a browser without a bundler, an import map points the names at `lib/`
-(see `web/index.html`; `run.sh` serves `lib/` beside the page).
+(see `web/index.html`, or `fsttm_web.IMPORT_MAP`).
 
-The library is the dialog FSM and nothing console-specific: since 0.3.0
-the consoles' shell (top bar, docks, strip, colours) is not here. The
-metis-loop and metis-agent consoles each keep their own copy (shell-copy
-s-7c739dd7: independent repos keep copies, never a dependency for look and
-feel).
+## Design
 
-The dialog needs one thing from an LLM side, the **backend adapter**:
-`turn(id, text, mode, {signal})` → an async iterable of sentences
-(`mode`: `intent` | `talk`), and `cut(id, heard)`: turn `id` was heard up
-to `heard` (called on a cut and when a resumed turn finishes). The adapter
-owns the dialog history. `web/backend/llama.js` is the llama-server one;
-the page wires it as `llm` and `onHeard` of `Dialog`.
+- **The floor is ownership, not speech.** `fsttm.js` interprets
+  `fsttm.json`: six floor states, the 14 transitions keyed by the
+  (system, user) action pair, the action remap, and the paper's §3.2 costs.
+  Any interpreter of the table runs `fixtures/fsttm-cases.json`.
+- **Attention** sits in front of the floor. ASLEEP, only a wake word is
+  acted on; AWAKE, utterances are commands. Sleep only when the assistant is
+  addressed by name ("computer, go to sleep"), so a misheard bare phrase
+  never turns voice off. The wake words are the application's (`wakeWords`);
+  `DEFAULT_WAKE` is a neutral one.
+- **The dialog** (`dialog.js`) is pure logic over injected parts
+  (recognizer, tts, llm, log). The same event table runs scripted in node
+  (`test/dialog.mjs`) and in Chrome (`?selftest`). Barge-in is a policy
+  (`words` / `energy` / `none`). A transcript that is only the system's own
+  speech is dropped as echo. A short stop phrase cuts at once. "Continue"
+  resumes a cut reply from the cut word, with no new LLM call.
+- **The heard-text invariant.** On a cut, the dialog history keeps only what
+  was heard, up to the cut word, and the unsaid rest stays out of the
+  context. `tts.js` knows the heard text from `onboundary`. Voices that fire
+  no boundary events (Linux speech-dispatcher) get an estimate from the time
+  spoken, marked estimated.
 
-`web/backend/ws.js` is the other adapter: metis-agent's wire (metis-agent
-`docs/FRAMEWORK.md` §5). Served by metis-agent
-(`metis-agent -config config.agent.yaml -ui-dir <fsttm-web>/web`), the page
-finds `/ws` and uses it; served by llama-server it falls back to
-`backend/llama.js` (`?backend=llama|ws` forces one). Over ws the agent also
-sends its narrations (`narration{path,kind,form,line,sentence}`): the page
-voices surprises, results, notices, quiescence, task outcomes and
-announcements floor permitting (parked while you hold the floor or she
-sleeps) and shows the clause events without voicing them
-(`?narrate=all|none`); runtime, rack, command, pending and domains rows go
-to the event log. `node --experimental-websocket test/parity.mjs
-ws://localhost:8395/ws` runs the corpus through the agent.
+## The backend adapter and the wire
 
-- `web/backend/llama.js`: the harness's two-pass turn (TemplateGemma4 rendering, pass 1
-  greedy under `dog.gbnf`, pass 2 the bare `Spoken response:` continuation)
-  over `/completion` with `cache_prompt`.
-- `web/parity.js`: corpus, harness reference and comparison; used by the page
-  and by `test/parity.mjs`.
-- `prompt/`, `grammar/`: copied verbatim from metis-agent `go/grammar/`
-  (a8c862a). `run.sh` copies them into `web/assets/` because llama-server
-  serves nothing outside `--path`.
-- `test/fixtures/harness-e2b.jsonl`: the harness's answers on E2B Q4,
-  `llmbench -template gemma4 -prompt <dog-prompt + pass2-examples-gemma4>
-  -corpus grammar/dog-corpus.tsv` (metis-agent internal/llm, 54/54).
+The dialog needs one thing from the LLM side, a **backend adapter**:
+`turn(id, text, mode, {signal})` → an async iterable of sentences (`mode`:
+`intent` | `talk`), and `cut(id, heard)`: turn `id` was heard up to `heard`.
+The adapter owns the dialog history. The reference page has two:
+
+- `web/backend/llama.js`: a plain llama-server over `/completion` with
+  `cache_prompt`. The intent mode is a two-pass turn: pass 1 is the intent
+  JSON under a grammar, pass 2 one spoken line. The talk mode is a free
+  dialog. Rendering is Gemma 4's chat template.
+- `web/backend/ws.js`: any backend that speaks **the wire** on `/ws`.
+
+**The wire** (`fsttm_web.protocol`) is JSON text frames on one websocket,
+each an object with `ev`:
+
+| direction | frames |
+|---|---|
+| page → backend | `say_text{id, text, mode}` · `cut{id, heard}` · `heard{id, text}` (a narration was voiced, this much of it) |
+| backend → page | `intent{id, intent, voice}` · `talk{id, text, done}` · `error{id, error}` · `narration{id, path, kind, form, line, sentence}` (something to say when the floor is free; form `R` is shown, never voiced) |
+
+**An application extends the wire** with frames of its own, either way. Any
+other `ev` is the application's: the library neither defines nor needs it.
+`WsBackend` hands unknown frames to `onFrame`, and `send(frame)` sends the
+page's own. `parse()` accepts any frame with an `ev`.
 
 ## Packages: JS and Python, one source
 
@@ -91,41 +89,64 @@ lib/ is packaged twice, from the same files; nothing is copied by hand.
 
 ```
 npm install git+https://github.com/metis-lang-dev/fsttm-web.git#<commit>
-npm pack                     # fsttm-web-<version>.tgz; npm install ./fsttm-web-<version>.tgz
+npm pack                     # fsttm-web-<version>.tgz
 ```
 
 A page served by any server points its import map at the installed
-`node_modules/fsttm-web/lib/` (or the server mounts it at `/lib/`).
+`node_modules/fsttm-web/lib/`, or the server mounts it at `/lib/`.
 
 **Python** (`pyproject.toml`, package `fsttm_web`): the same lib/, the
-reference page (web/) and its assets (prompt/, grammar/, test/fixtures/),
-with a mount helper for aiohttp and the wire in Python terms:
+reference page (web/) and its assets (prompt/, grammar/), with a mount
+helper for aiohttp and the wire in Python terms:
 
 ```
 pip install -e 'fsttm-web[aiohttp]'      # editable: reads lib/ and web/ from this checkout
 python examples/serve.py                 # the reference page + a stub backend: http://localhost:8397/?backend=ws
-pytest test/test_python.py
 ```
 
 ```python
 import fsttm_web                     # LIB, WEB, asset(name), routes(), IMPORT_MAP
 from fsttm_web.aiohttp import mount  # mount(app): /lib/, /assets/<name>, the page at / (page=False: lib only)
-import fsttm_web.protocol as wire    # the frames (say_text, cut, intent, talk, narration …), parse(), Echo (a stub backend)
+import fsttm_web.protocol as wire    # the frames, parse(), Echo (a stub backend)
 ```
 
 A wheel (`pip wheel .`) carries its own copies of lib/, web/ and the
-assets, made at build time; run.sh's gitignored copies (web/lib,
-web/assets) are not in it.
+assets, made at build time.
 
-## The page (step 2)
+## The reference page (web/)
 
-The dialog runs from page load: type to her, or press **mic** (it wakes her).
-**replies: long** (the default) is free conversation, several sentences to
-talk over; **short** is the harness's intent turn. Panels follow the Python
-FSTTM TUI: chat over turn timings on the left; the floor diagram (the TUI's,
-current state green, the one just left blue),
-the numbers and the event log on the right. Each panel scrolls on its own.
+```
+MODEL=<gemma4 gguf> ./run.sh     # llama-server serving the page: http://localhost:8393
+```
 
-Styles are Tailwind 3.4.17, built like metis-loop's nina-web (no bundler):
-`npm run build` turns `web/src/input.css` into `web/styles.css` (committed).
-llama-server sends no cache headers: after an update, reload with Ctrl+Shift+R.
+The dialog runs from page load: type, or press **mic** (it wakes the
+assistant). **replies: long** (the default) is free conversation, several
+sentences to talk over; **short** is the intent turn of the example, a desk
+assistant with a lamp (`prompt/example-prompt.txt`, `grammar/example.gbnf`:
+LIGHT_ON, LIGHT_OFF, TIME, CHITCHAT, UNKNOWN). An application gives its own
+prompt and grammar to `loadAssets`.
+
+The panels: the chat over the turn timings; the floor diagram (the current
+state green, the one just left blue), the numbers and the event log.
+
+URL options:
+- `?asleep`: start asleep, so the wake word comes first.
+- `?wake=a,b`: the wake words.
+- `?reply=short`: start in the intent mode.
+- `?backend=llama|ws`: force a backend.
+- `?narrate=all|none`: voice every narration, or none.
+- `?selftest`: the event table in this Chrome.
+
+**save bench (JSONL)** exports every dialog event, timed.
+
+Styles are Tailwind 3.4.17 with no bundler: `npm run build` turns
+`web/src/input.css` into `web/styles.css`, which is committed.
+llama-server sends no cache headers, so after an update reload with
+Ctrl+Shift+R.
+
+## Tests
+
+```
+npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table)
+pytest test/test_python.py       # the package: one source, the stub backend, the mount
+```

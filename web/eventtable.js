@@ -1,4 +1,4 @@
-// eventtable.js — DESIGN.md §3's event table as scripted scenarios: each
+// eventtable.js — the dialog's event table as scripted scenarios: each
 // row is browser signals in, FSTTM transitions and dialog actions out.
 // Runs in node (test/dialog.mjs) and in Chrome (index.html?selftest) on the
 // same Dialog; the TTS and the LLM are fakes so every row is deterministic
@@ -47,7 +47,7 @@ async function make(table, { bargeIn = 'words', asleep = false, llmDelay = 0 } =
   return { d, tts, calls, trans, bench, adv: ms => { clock += ms; } };
 }
 
-// rows: [signal, the §3 row it verifies, run(ctx) → observed string, expected string]
+// rows: [signal, the event-table row it verifies, run(ctx) → observed string, expected string]
 export function rows() {
   return [
     ['onspeechstart (recognition)', 'user G → USER (tentative)', async c => { c.d.speechStart(); return c.d.state; }, 'USER'],
@@ -137,7 +137,7 @@ export function rows() {
       c.d.speechStart(); await c.d.final('stand up'); return `${c.d.state} llm=${c.calls.length}`;
     }, 'FREEu llm=0', { asleep: true }],
     ['wake word while ASLEEP', 'AWAKE, then as above (the remainder is the command)', async c => {
-      c.d.speechStart(); await c.d.final('hey nina what time is it');
+      c.d.speechStart(); await c.d.final('hey computer what time is it');
       return `${c.d.attention.state} llm(${c.calls.join(',')}) ${c.d.state}`;
     }, 'AWAKE llm(what time is it) SYSTEM', { asleep: true }],
   ];

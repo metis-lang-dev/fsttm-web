@@ -1,0 +1,4 @@
+# The example intent turn's pass-1 grammar: one intent JSON object (prompt/example-prompt.txt)
+root ::= "{" space "\"intent\"" space ":" space intent space "}"
+intent ::= "\"LIGHT_ON\"" | "\"LIGHT_OFF\"" | "\"TIME\"" | "\"CHITCHAT\"" | "\"UNKNOWN\""
+space ::= | " "

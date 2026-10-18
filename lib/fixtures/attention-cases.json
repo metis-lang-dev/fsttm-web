@@ -1,29 +1,29 @@
 {
- "about": "metis-agent attention_test.go as data (fsttm-web/web/attention.js runs them too).",
+ "about": "The attention layer's cases as data (lib/attention.js runs them, test/run.mjs).",
  "match": {
   "wake_words": [
-   "nina",
-   "hey nina",
-   "hello nina"
+   "computer",
+   "hey computer",
+   "hello computer"
   ],
   "cases": [
    {
-    "text": "Hello Nina!",
+    "text": "Hello Computer!",
     "wake": true,
     "rem": ""
    },
    {
-    "text": "hey nina, go to the kitchen",
+    "text": "hey computer, go to the kitchen",
     "wake": true,
     "rem": "go to the kitchen"
    },
    {
-    "text": "Nina go to the kitchen",
+    "text": "Computer go to the kitchen",
     "wake": true,
     "rem": "go to the kitchen"
    },
    {
-    "text": "go to the kitchen nina",
+    "text": "go to the kitchen computer",
     "wake": true,
     "rem": "go to the kitchen"
    },
@@ -44,8 +44,8 @@
    "name": "sleep requires the wake prefix",
    "enabled": true,
    "wake_words": [
-    "nina",
-    "hey nina"
+    "computer",
+    "hey computer"
    ],
    "sleep_phrases": null,
    "start_asleep": false,
@@ -56,7 +56,7 @@
      "state": "AWAKE"
     },
     {
-     "text": "nina, go to sleep",
+     "text": "computer, go to sleep",
      "action": "sleep",
      "state": "ASLEEP"
     },
@@ -66,7 +66,7 @@
      "state": "ASLEEP"
     },
     {
-     "text": "hey nina stand up",
+     "text": "hey computer stand up",
      "action": "wake",
      "out": "stand up",
      "state": "AWAKE"
@@ -90,10 +90,10 @@
  ],
  "defaults": {
   "wake_words": [
-   "nina",
-   "hey nina",
-   "hi nina",
-   "hello nina"
+   "computer",
+   "hey computer",
+   "hi computer",
+   "hello computer"
   ],
   "sleep_phrases": [
    "go to sleep",
