@@ -150,3 +150,7 @@ Ctrl+Shift+R.
 npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table)
 pytest test/test_python.py       # the package: one source, the stub backend, the mount
 ```
+
+## License
+
+Apache License 2.0 (see `LICENSE`, `NOTICE`).

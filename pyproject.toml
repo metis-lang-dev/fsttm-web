@@ -4,7 +4,7 @@
 # wheel copies lib/, web/, prompt/ and grammar/ in; an
 # editable install reads them from the checkout (fsttm_web.ROOT).
 [build-system]
-requires = ["hatchling>=1.25"]
+requires = ["hatchling>=1.27"]      # PEP 639: license as an SPDX expression
 build-backend = "hatchling.build"
 
 [project]
@@ -12,6 +12,8 @@ name = "fsttm-web"
 dynamic = ["version"]
 description = "The FSTTM floor machine in the browser as a Python UI library: lib/ (floor, attention, dialog with barge-in and the heard-text cut, speechSynthesis) and the reference page, mounted on a Python web server"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.10"
 dependencies = []
 

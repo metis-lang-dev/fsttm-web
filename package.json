@@ -3,7 +3,7 @@
   "version": "0.4.0",
   "type": "module",
   "description": "the FSTTM floor machine in the browser: a dialog framework (lib/: floor machine, attention, dialog with barge-in and the heard-text cut, speechSynthesis) and its reference page (web/) over llama-server",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/metis-lang-dev/fsttm-web.git"
