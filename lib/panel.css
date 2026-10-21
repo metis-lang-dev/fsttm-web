@@ -1,0 +1,26 @@
+/* panel.css — the dialog panel (panel.js): the intent chat over the one input. It takes
+   the page's colours: text and lines in currentColor, the accents from --fw-accent
+   (default the link blue) and --fw-side (the side channel's, default amber). */
+.fw-panel { display: flex; flex-direction: column; min-height: 0; height: 100%; font: inherit; color: inherit;
+  --fw-accent-c: var(--fw-accent, #2563eb); --fw-side-c: var(--fw-side, #d97706); }
+.fw-panel .fw-bar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; padding: 4px 0; font-size: 12px; }
+.fw-panel .fw-title { font-weight: 600; }
+.fw-panel .fw-floor { margin-left: auto; opacity: .7; font-variant: all-small-caps; letter-spacing: .03em; }
+.fw-panel .fw-mode { border: 1px solid currentColor; border-radius: 4px; padding: 0 5px; }
+.fw-panel .fw-channel { color: #fff; background: var(--fw-side-c); border-radius: 4px; padding: 0 6px; font-weight: 600; }
+.fw-panel .fw-log { list-style: none; margin: 0; padding: 4px 0; flex: 1 1 auto; min-height: 4em; overflow: auto; overflow-wrap: anywhere; }
+.fw-panel .fw-row { display: grid; grid-template-columns: 4.5em 1fr; gap: 0 8px; padding: 2px 0; }
+.fw-panel .fw-who { font-size: 11px; opacity: .65; text-align: right; padding-top: 2px; }
+.fw-panel .fw-person .fw-text { font-weight: 600; }
+.fw-panel .fw-intent code { font: 12px/1.35 ui-monospace, monospace; opacity: .8; }
+.fw-panel .fw-agent .fw-text { color: var(--fw-accent-c); }
+.fw-panel .fw-side .fw-text, .fw-panel .fw-side .fw-who { color: var(--fw-side-c); }
+.fw-panel .fw-note .fw-text { font-style: italic; opacity: .75; }
+.fw-panel .fw-tags { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; }
+.fw-panel .fw-tags:empty { display: none; }
+.fw-panel .fw-tag { font-size: 11px; border: 1px solid currentColor; border-radius: 3px; padding: 0 4px; opacity: .7; }
+.fw-panel .fw-input { display: flex; gap: 6px; align-items: center; padding-top: 4px; }
+.fw-panel .fw-input .fw-text { flex: 1 1 auto; min-width: 0; font: inherit; }
+.fw-panel[data-channel="side"] .fw-input .fw-text { outline: 2px solid var(--fw-side-c); }
+.fw-panel .fw-mic[aria-pressed="true"] { color: #fff; background: var(--fw-accent-c); }
+.fw-panel .fw-voice { font-size: 12px; white-space: nowrap; }

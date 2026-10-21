@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dialog Panel</title>
+<!-- the panel (lib/panel.js) in a dock, over the stub backend of examples/serve.py:
+     python examples/serve.py; open http://localhost:8397/panel.html -->
+<link rel="stylesheet" href="lib/panel.css">
+<style>
+  :root { --bg: #f7f6f3; --fg: #1c1c1a; --line: #d6d4ce; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #181816; --fg: #e9e8e4; --line: #3b3a37; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+  main { display: grid; grid-template-columns: 1fr minmax(280px, 380px); gap: 12px; padding: 12px 16px; height: calc(100vh - 24px); box-sizing: border-box; }
+  section { border: 1px solid var(--line); border-radius: 6px; padding: 8px; min-height: 0; }
+  @media (max-width: 700px) { main { grid-template-columns: 1fr; height: auto; } #dock { height: 60vh; } }
+</style>
+<script type="importmap">
+{ "imports": { "fsttm-web/fsttm": "./lib/fsttm.js", "fsttm-web/attention": "./lib/attention.js",
+               "fsttm-web/dialog": "./lib/dialog.js", "fsttm-web/tts": "./lib/tts.js",
+               "fsttm-web/ws": "./lib/ws.js", "fsttm-web/panel": "./lib/panel.js" } }
+</script>
+</head>
+<body>
+<main>
+  <section><h1>The dialog panel</h1>
+    <p>Type in the panel's line, press <kbd>mic</kbd>, or call <code>say("…")</code> in the console: one entry.
+    <kbd>Ctrl</kbd>+<kbd>Space</kbd> flips to the side channel (a stub chat here); hold <kbd>Space</kbd> outside a text field to talk to it while held.</p>
+  </section>
+  <section id="dock"></section>
+</main>
+<script type="module">
+  import { Panel } from 'fsttm-web/panel';
+  import { connect } from 'fsttm-web/ws';
+  const backend = await connect(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  const table = await (await fetch('lib/fsttm.json')).json();
+  const panel = new Panel(document.getElementById('dock'), {
+    backend, table, title: 'dialog',
+    side: { label: 'the chat', send: async text => `the chat got: ${text}` },
+  });
+  if (!backend) panel.note('no backend on /ws: python examples/serve.py');
+  window.say = text => panel.say(text);
+  window.panel = panel;
+</script>
+</body>
+</html>

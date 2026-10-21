@@ -19,6 +19,8 @@ lib/   fsttm.js fsttm.json   the floor machine and its table (the machine as dat
        attention.js          wake / sleep in front of the floor
        dialog.js             browser signals → floor actions: barge-in, echo rejection, the heard-text cut, resume
        tts.js                speechSynthesis with the text actually heard
+       ws.js                 the backend adapter over the wire (WsBackend, connect)
+       panel.js panel.css    the dialog as a widget panel: the one input and the intent chat
        fixtures/             the floor machine's and attention's cases as data (canonical)
 ```
 
@@ -27,6 +29,8 @@ import { FSTTM } from 'fsttm-web/fsttm';                  // the floor machine (
 import { Attention } from 'fsttm-web/attention';          // wake / sleep: new Attention({ wakeWords, sleepPhrases, enabled, startAsleep })
 import { Dialog, attachRecognizer } from 'fsttm-web/dialog';
 import { BrowserTTS, splitSentences } from 'fsttm-web/tts';
+import { WsBackend, connect } from 'fsttm-web/ws';         // the wire's adapter (below)
+import { Panel, PanelCore } from 'fsttm-web/panel';        // the panel (below); lib/panel.css
 ```
 
 In a browser without a bundler, an import map points the names at `lib/`
@@ -55,6 +59,34 @@ In a browser without a bundler, an import map points the names at `lib/`
   no boundary events (Linux speech-dispatcher) get an estimate from the time
   spoken, marked estimated.
 
+## The panel
+
+`panel.js` is the dialog as a widget a page embeds, the way it embeds a dock. It holds the
+**one input**, voice or text: the mic, the text line, the floor and the input's mode. It
+also holds the **intent chat**: what was heard or typed, the intent the backend made of it,
+and the backend's words, tagged spoken or cut. The panel fills an element the page gives
+it and takes the page's colours (`lib/panel.css`: currentColor, `--fw-accent`, `--fw-side`).
+
+```js
+const panel = new Panel(document.getElementById('dock'), { backend: await connect(url), table });
+window.say = text => panel.say(text);
+```
+
+- **One entry.** The text line, a recognized utterance and `panel.say(text)` all take
+  one path: the floor's `final()`, the echo and attention rules, then a turn on the
+  backend. So a script, a test and a backend's text socket type into the same line as
+  a person. A row records each input's source: typed, heard or said.
+- **Two channels.** The backend is the main one. A page with a second consumer of the
+  voice gives `side: { label, send(text, {id}) → words }`. `flip()` moves the input to it
+  (the `flipKey`, Ctrl+Space by default). `hold()`/`release()` is the quasimode: the side
+  channel only while the `holdKey` is held (Space by default, never while the focus is in
+  a text field). `onChannel(channel, how)` tells the page.
+- **The page's own.** `setMode(text)` shows the page's word for the input's mode.
+  `onFrame` gets every frame the panel doesn't know (narration it voices itself), and
+  `log` every dialog event (a stop phrase, `keyword_stop`, never reaches a turn).
+- `PanelCore` is the logic without the DOM (`test/panel.mjs` drives it on a fake backend).
+  `web/panel.html` is the panel in a dock over `examples/serve.py`'s stub backend.
+
 ## The backend adapter and the wire
 
 The dialog needs one thing from the LLM side, a **backend adapter**:
@@ -66,7 +98,8 @@ The adapter owns the dialog history. The reference page has two:
   `cache_prompt`. The intent mode is a two-pass turn: pass 1 is the intent
   JSON under a grammar, pass 2 one spoken line. The talk mode is a free
   dialog. Rendering is Gemma 4's chat template.
-- `web/backend/ws.js`: any backend that speaks **the wire** on `/ws`.
+- `lib/ws.js` (`fsttm-web/ws`; `web/backend/ws.js` re-exports it): any backend that
+  speaks **the wire** on `/ws`.
 
 **The wire** (`fsttm_web.protocol`) is JSON text frames on one websocket,
 each an object with `ev`:
@@ -147,7 +180,7 @@ Ctrl+Shift+R.
 ## Tests
 
 ```
-npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table)
+npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table) + test/panel.mjs (the panel's logic)
 pytest test/test_python.py       # the package: one source, the stub backend, the mount
 ```
 

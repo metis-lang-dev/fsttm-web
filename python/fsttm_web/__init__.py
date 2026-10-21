@@ -24,7 +24,7 @@ copied by hand.
 """
 from pathlib import Path
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 _PKG = Path(__file__).resolve().parent
 
@@ -72,6 +72,8 @@ IMPORT_MAP = {
         "fsttm-web/attention": "./lib/attention.js",
         "fsttm-web/dialog": "./lib/dialog.js",
         "fsttm-web/tts": "./lib/tts.js",
+        "fsttm-web/ws": "./lib/ws.js",
+        "fsttm-web/panel": "./lib/panel.js",
     }
 }
 """The import map a page puts in a <script type="importmap"> so its
