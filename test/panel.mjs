@@ -2,7 +2,7 @@
 // the event table's fake TTS: one entry for every input, the intent chat's rows, the
 // narration, a cut back to the backend, the two channels and the quasimode.
 import { readFile } from 'node:fs/promises';
-import { PanelCore } from '../lib/panel.js';
+import { PanelCore, holdable } from '../lib/panel.js';
 import { FakeTTS } from '../web/eventtable.js';
 
 const table = JSON.parse(await readFile(new URL('../lib/fsttm.json', import.meta.url), 'utf8'));
@@ -127,6 +127,37 @@ const rows = p => p.rows.map(r => `${r.who}${r.via ? ':' + r.via : ''}${r.channe
   const { p, backend, events } = make();
   await p.say('stop');
   ok(backend.turns.length === 0 && events.includes('keyword_stop'), 'a stop phrase: no turn, keyword_stop to the page');
+}
+
+// 9. the source rides with its own final: a dropped utterance shifts no later label (review P-2)
+{
+  const { p, tts } = make();
+  await p.say('stop', { via: 'text' });                 // a stop phrase: dropped by the floor, no turn
+  await p.say('go to the panel', { via: 'voice' });
+  tts.finish();
+  await p.say('go to the note');
+  ok(JSON.stringify(p.rows.filter(r => r.who === 'person').map(r => r.via)) === JSON.stringify(['voice', 'say']),
+    `the sources after a dropped line: ${JSON.stringify(p.rows.filter(r => r.who === 'person').map(r => r.via))}`);
+}
+
+// 10. the core keeps as many rows as it shows (review P-3)
+{
+  const { p, tts } = make({ maxRows: 5 });
+  for (let i = 0; i < 4; i++) { await p.say(`go to w${i}`); tts.finish(); }
+  ok(p.rows.length === 5 && p.rows.at(-1).n === 12 && p.turns.size <= 5, `capped: ${p.rows.length} rows, last n ${p.rows.at(-1).n}, ${p.turns.size} turns`);
+}
+
+// 11. a held Space is push-to-talk only where Space means nothing else (review P-1)
+{
+  const E = (tagName, attrs = {}, editable = false) => ({ tagName, isContentEditable: editable,
+    getAttribute: k => attrs[k] ?? null, hasAttribute: k => k in attrs });
+  ok(holdable(null) && holdable(E('BODY')) && holdable(E('DIV')) && holdable(E('UL')) && holdable(E('MAIN', { role: 'region' })),
+    'holdable: the body, a container, a list');
+  ok(!holdable(E('BUTTON')) && !holdable(E('SUMMARY')) && !holdable(E('A', { href: '#' })) && !holdable(E('INPUT', { type: 'checkbox' })),
+    'not holdable: a button, a summary, a link, a checkbox');
+  ok(!holdable(E('DIV', { role: 'button' })) && !holdable(E('SPAN', { role: 'tab' })) && !holdable(E('LI', { role: 'option' })),
+    'not holdable: role button, tab, option');
+  ok(!holdable(E('TEXTAREA')) && !holdable(E('DIV', {}, true)) && holdable(E('A')), 'not holdable: a text field, an editable; an anchor without href is');
 }
 
 await tick();
