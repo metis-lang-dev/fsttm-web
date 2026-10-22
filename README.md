@@ -100,7 +100,8 @@ The adapter owns the dialog history. The reference page has two:
   dialog. Rendering is Gemma 4's chat template.
 - `lib/ws.js` (`fsttm-web/ws`; `web/backend/ws.js` re-exports it): any backend that
   speaks **the wire** on `/ws`. A turn on a closed socket fails at once ("ws closed"),
-  never waits. `reconnect: ms` opens a dropped socket again (a page left idle loses its
+  never waits, and `send` throws on a closed socket (a caller that may run during a drop
+  checks `isOpen` first). `reconnect: ms` opens a dropped socket again (a page left idle loses its
   socket to the server's heartbeat), and `onReopen(backend)` is where the page sends its
   own hello again.
 

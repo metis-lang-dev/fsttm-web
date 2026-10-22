@@ -1,7 +1,7 @@
 // node test/ws.mjs — the wire's adapter (lib/ws.js) on a fake WebSocket: a turn's answer, a
 // close that fails the waiting turn, a turn on a closed socket that fails at once (it does not
 // wait), the reconnect and its onReopen hook, no reconnect after close().
-import { WsBackend } from '../lib/ws.js';
+import { WsBackend, connect } from '../lib/ws.js';
 
 let pass = 0, fail = 0;
 const ok = (cond, what) => { if (cond) pass++; else { fail++; console.log('FAIL', what); } };
@@ -74,6 +74,17 @@ async function turn(b, id, text) {
   b.close();
   await sleep(20);
   ok(sockets.at(-1) === s && !b.isOpen, 'no reconnect after close()');
+}
+
+// 4. connect with no backend: null, and no orphan left reconnecting (opus's review F1)
+{
+  class DeadWS extends FakeWS {
+    up() { this.readyState = 3; this.onerror?.(); this.onclose?.(); }   // a browser's: error, then close
+  }
+  const before = sockets.length;
+  const b = await connect('ws://x/ws', { WebSocketImpl: DeadWS, reconnect: 5, timeoutMs: 100 });
+  await sleep(60);
+  ok(b === null && sockets.length === before + 1, `no backend: null, one socket only (${sockets.length - before})`);
 }
 
 console.log(`${pass}/${pass + fail} ws checks`);
