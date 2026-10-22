@@ -154,12 +154,12 @@ function setup() {
   const ev = key => ({ key, repeat: false, preventDefault() {} });
   handlers.keydown(ev('F8')); handlers.keyup(ev('F8'));
   ok(n.state === 'reading', 'a press starts');
-  await new Promise(r => setTimeout(r, 35));
+  await new Promise(r => setTimeout(r, 60));
   handlers.keydown(ev('F8')); handlers.keyup(ev('F8'));
   ok(n.state === 'paused', 'a press after the double window pauses');
   handlers.keydown(ev('F8')); handlers.keyup(ev('F8'));     // within 30 ms of the last: a double → stop
   ok(n.state === 'stopped', 'a double press stops');
-  await new Promise(r => setTimeout(r, 35));
+  await new Promise(r => setTimeout(r, 60));
   handlers.keydown(ev('F8'));
   await new Promise(r => setTimeout(r, 50));                // held past `long`
   ok(n.state === 'stopped', 'a hold stops (here: stays stopped)');
