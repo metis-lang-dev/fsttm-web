@@ -21,6 +21,7 @@ lib/   fsttm.js fsttm.json   the floor machine and its table (the machine as dat
        tts.js                speechSynthesis with the text actually heard
        ws.js                 the backend adapter over the wire (WsBackend, connect)
        panel.js panel.css    the dialog as a widget panel: the one input and the intent chat
+       narrator.js (+css)    the page's selected text read aloud on one key, beside the dialog (below)
        fixtures/             the floor machine's and attention's cases as data (canonical)
 ```
 
@@ -31,6 +32,7 @@ import { Dialog, attachRecognizer } from 'fsttm-web/dialog';
 import { BrowserTTS, splitSentences } from 'fsttm-web/tts';
 import { WsBackend, connect } from 'fsttm-web/ws';         // the wire's adapter (below)
 import { Panel, PanelCore } from 'fsttm-web/panel';        // the panel (below); lib/panel.css
+import { Narrator, attachSelection, attachKey, narratorView } from 'fsttm-web/narrator';   // lib/narrator.css
 ```
 
 In a browser without a bundler, an import map points the names at `lib/`
@@ -86,6 +88,32 @@ window.say = text => panel.say(text);
   `log` every dialog event (a stop phrase, `keyword_stop`, never reaches a turn).
 - `PanelCore` is the logic without the DOM (`test/panel.mjs` drives it on a fake backend).
   `web/panel.html` is the panel in a dock over `examples/serve.py`'s stub backend.
+
+## The narrator
+
+A floor-independent narration stream: the page's **selected text** read aloud sentence by
+sentence on one page-wide key, while the dialog goes on (the user's xsel-to-speech, in the
+page). It never takes the floor and never touches the floor machine, attention or the
+dialog; it only wraps the dialog's `BrowserTTS` to know when the dialog speaks.
+
+```js
+const narrator = new Narrator({ tts, rate: 1.3 });      // tts: the dialog's BrowserTTS — its voice; rate: the narrator's own (null: the dialog's)
+attachSelection(narrator, document);                     // selectionchange: a new non-empty selection RESETS the narrator to it (stopped, at its first sentence)
+attachKey(narrator, document, { key: 'F8' });            // press: stopped → reading · reading → paused · paused → reading; hold ≥ 600 ms or a double press: stop
+narratorView(document.getElementById('narrator'), narrator);   // the indicator: state · n of N · the sentence (lib/narrator.css)
+```
+
+- **States:** `stopped`, `reading`, `paused`, `yielding`. A pause cuts the sentence; a resume
+  reads it again from its start. Reading past the last sentence stops; the next press reads
+  from the top. `narrator.onchange(snapshot)` reports every change.
+- **Yielding:** speechSynthesis is one queue per page, so before the dialog's utterance is
+  queued the narrator cuts its own sentence and waits (`yielding`); after the dialog's
+  `onend` it resumes at its cursor. A barge-in `cancel()` of the dialog's speech empties the
+  synth's whole queue: the narrator's current sentence is re-queued, not lost. A press while
+  yielding pauses it; the dialog ending then leaves it paused. A press while the dialog
+  speaks waits and reads when the dialog is done.
+- The page's selection stays the person's: the sentence is highlighted in the indicator, not
+  on the page. In `web/`: select text, F8 (`?narrate_key=`, `?narrate_rate=`).
 
 ## The backend adapter and the wire
 
@@ -184,7 +212,7 @@ Ctrl+Shift+R.
 ## Tests
 
 ```
-npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table) + test/panel.mjs (the panel's logic) + test/ws.mjs (the wire's adapter)
+npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table) + test/panel.mjs (the panel's logic) + test/ws.mjs (the wire's adapter) + test/narrator.mjs (the narrator on a stub synth beside the dialog's TTS)
 pytest test/test_python.py       # the package: one source, the stub backend, the mount
 ```
 

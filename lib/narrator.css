@@ -1,0 +1,8 @@
+/* narrator.css — the narrator's indicator (lib/narrator.js narratorView) */
+.narrator { display: inline-flex; align-items: center; gap: .5em; font: 11px/1.4 ui-monospace, monospace; color: #94a3b8;
+  max-width: 100%; }
+.narrator-state { padding: 0 .5em; border-radius: 999px; border: 1px solid #334155; }
+.narrator[data-state="reading"] .narrator-state { color: #0f172a; background: #34d399; border-color: transparent; }
+.narrator[data-state="paused"] .narrator-state { color: #fbbf24; border-color: #fbbf24; }
+.narrator[data-state="yielding"] .narrator-state { color: #67e8f9; border-color: #67e8f9; }
+.narrator-sentence { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #cbd5e1; }

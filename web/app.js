@@ -9,6 +9,7 @@ import { FSTTM } from 'fsttm-web/fsttm';
 import { Attention } from 'fsttm-web/attention';
 import { Dialog, attachRecognizer } from 'fsttm-web/dialog';
 import { BrowserTTS, splitSentences } from 'fsttm-web/tts';
+import { Narrator, attachSelection, attachKey, narratorView } from 'fsttm-web/narrator';
 import { Bench } from './bench.js';
 import { runEventTable } from './eventtable.js';
 import { FsmView } from './fsmview.js';
@@ -70,6 +71,12 @@ const fsttm = new FSTTM(table);
 const attention = new Attention({ wakeWords: q.get('wake')?.split(',').map(w => w.trim()).filter(Boolean),
   sleepPhrases: ['go to sleep', 'voice off', 'stop listening', "that's all"], startAsleep: q.has('asleep') });
 const tts = new BrowserTTS();
+// the narrator: the page's selection read aloud on F8, floor-independent, yielding to the dialog's speech
+const narrator = new Narrator({ tts, rate: Number(q.get('narrate_rate')) || null });
+attachSelection(narrator, document);
+attachKey(narrator, document, { key: q.get('narrate_key') ?? 'F8' });
+narratorView($('narrator'), narrator, { key: q.get('narrate_key') ?? 'F8' });
+window.fsttmNarrator = narrator;
 const turns = [];
 // narrations voiced (the rest are shown): the kinds a backend says out loud
 // (surprises, results, notices, quiescence …); ?narrate=all voices every one,

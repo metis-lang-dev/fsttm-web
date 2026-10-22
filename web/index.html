@@ -6,6 +6,7 @@
 <title>fsttm-web</title>
 <!-- Tailwind, no bundler: npm run build (src/input.css → styles.css) -->
 <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="lib/narrator.css">
 </head>
 <body class="h-full bg-slate-950 text-slate-200 font-sans antialiased">
 <div class="mx-auto max-w-7xl p-3 md:p-4 flex flex-col gap-3 md:h-full">
@@ -24,6 +25,7 @@
       <input id="attnSwitch" type="checkbox" class="accent-emerald-400 w-4 h-4">
       <span id="attn" class="text-slate-400">—</span>
     </label>
+    <span id="narrator" title="select text, then F8"></span>
     <div class="ml-auto flex flex-wrap items-center gap-2">
       <button id="replyBtn" type="button" class="btn" title="long: free conversation, several sentences · short: the intent turn (JSON + one ack)">replies: long</button>
       <select id="bargeSel" class="btn bg-slate-900" title="barge-in policy (README: Design)">
@@ -97,7 +99,8 @@
 <script type="importmap">
 { "imports": { "fsttm-web/fsttm": "./lib/fsttm.js", "fsttm-web/attention": "./lib/attention.js",
                "fsttm-web/dialog": "./lib/dialog.js", "fsttm-web/tts": "./lib/tts.js",
-               "fsttm-web/ws": "./lib/ws.js", "fsttm-web/panel": "./lib/panel.js" } }
+               "fsttm-web/ws": "./lib/ws.js", "fsttm-web/panel": "./lib/panel.js",
+               "fsttm-web/narrator": "./lib/narrator.js" } }
 </script>
 <script type="module" src="app.js"></script>
 </body>
