@@ -82,6 +82,21 @@ function setup() {
   ok(n.state === 'paused', 'press while reading after a yield pauses');
 }
 
+// 4b. the dialog speaks over its own speech (announce over a speaking system; a page calling
+//     tts.speak twice): the narrator stays yielding through the second reply, never between its sentences
+{
+  const { synth, tts, n } = setup();
+  n.select(TEXT); n.press(); synth.end();                  // reading sentence 2
+  tts.speak(['A first reply.']);
+  tts.speak(['A second reply at once.', 'Its second sentence.']);   // speak() cancels the first chain, queues the new one
+  await tick();
+  ok(n.state === 'yielding' && synth.q.map(u => u.text).join('|') === 'A second reply at once.', 'still yielding; only the dialog queued');
+  synth.end(); await tick();
+  ok(n.state === 'yielding' && synth.q.map(u => u.text).join('|') === 'Its second sentence.', 'the narrator never sits between the dialog\'s sentences');
+  synth.end(); await tick();
+  ok(n.state === 'reading' && n.i === 1 && synth.q[0]?.text === S[1], 'resumes at the same sentence after the second reply');
+}
+
 // 5. a press while yielding pauses: the dialog's end does not resume it
 {
   const { synth, tts, n } = setup();
