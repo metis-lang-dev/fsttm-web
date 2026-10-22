@@ -32,7 +32,7 @@
 <script type="module">
   import { Panel } from 'fsttm-web/panel';
   import { connect } from 'fsttm-web/ws';
-  const backend = await connect(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  const backend = await connect(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`, { reconnect: 2000 });
   const table = await (await fetch('lib/fsttm.json')).json();
   const panel = new Panel(document.getElementById('dock'), {
     backend, table, title: 'dialog',

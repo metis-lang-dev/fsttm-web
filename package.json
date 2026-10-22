@@ -1,6 +1,6 @@
 {
   "name": "fsttm-web",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "type": "module",
   "description": "the FSTTM floor machine in the browser: a dialog framework (lib/: floor machine, attention, dialog with barge-in and the heard-text cut, speechSynthesis) and its reference page (web/) over llama-server",
   "license": "Apache-2.0",
@@ -26,6 +26,6 @@
   "scripts": {
     "build": "npx tailwindcss@3.4.17 -c tailwind.config.cjs -i web/src/input.css -o web/styles.css --minify",
     "watch": "npx tailwindcss@3.4.17 -c tailwind.config.cjs -i web/src/input.css -o web/styles.css --watch",
-    "test": "node test/run.mjs && node test/dialog.mjs && node test/panel.mjs"
+    "test": "node test/run.mjs && node test/dialog.mjs && node test/panel.mjs && node test/ws.mjs"
   }
 }

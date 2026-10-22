@@ -99,7 +99,10 @@ The adapter owns the dialog history. The reference page has two:
   JSON under a grammar, pass 2 one spoken line. The talk mode is a free
   dialog. Rendering is Gemma 4's chat template.
 - `lib/ws.js` (`fsttm-web/ws`; `web/backend/ws.js` re-exports it): any backend that
-  speaks **the wire** on `/ws`.
+  speaks **the wire** on `/ws`. A turn on a closed socket fails at once ("ws closed"),
+  never waits. `reconnect: ms` opens a dropped socket again (a page left idle loses its
+  socket to the server's heartbeat), and `onReopen(backend)` is where the page sends its
+  own hello again.
 
 **The wire** (`fsttm_web.protocol`) is JSON text frames on one websocket,
 each an object with `ev`:
@@ -180,7 +183,7 @@ Ctrl+Shift+R.
 ## Tests
 
 ```
-npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table) + test/panel.mjs (the panel's logic)
+npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table) + test/panel.mjs (the panel's logic) + test/ws.mjs (the wire's adapter)
 pytest test/test_python.py       # the package: one source, the stub backend, the mount
 ```
 
