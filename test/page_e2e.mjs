@@ -32,29 +32,30 @@ try {
   c.ok(await ev(`document.querySelector('#dialog .fw-input').getBoundingClientRect().bottom <= innerHeight`), 'the input line inside the window');
 
   // the mic: a switch in the band (none by the text line); it follows the panel, its light flashes on a word
-  const sw = () => ev(`(() => { const b = document.querySelector('#band .fw-switch'); return b && [b.getAttribute('role'), b.dataset.state, b.getAttribute('aria-checked'), b.querySelector('.fw-sw-word').textContent].join('|'); })()`);
-  c.ok(await sw() === 'switch|off|false|off' && await ev(`!document.querySelector('#dialog .fw-mic')`), 'the mic switch in the band: off', await sw());
+  const sw = () => ev(`(() => { const b = document.querySelector('#band .fw-switch'); return b && [b.getAttribute('role'), b.dataset.state, b.getAttribute('aria-checked'), !!b.querySelector('.fw-sw-word')].join('|'); })()`);
+  c.ok(await sw() === 'switch|off|false|false' && await ev(`!document.querySelector('#dialog .fw-mic')`), 'the mic switch in the band: off, no word (the light and the track say it)', await sw());
   await ev(`(() => { panel.core.listening = true; panel.core.changed(); })()`);
-  c.ok(await sw() === 'switch|on|true|on', 'listening: the switch on', await sw());
+  c.ok(await sw() === 'switch|on|true|false', 'listening: the switch on', await sw());
   await ev(`panel.core.event('interim', { text: 'hel' })`);
   c.ok(await ev(`document.querySelector('#band .fw-switch').classList.contains('fw-sw-ping')`), 'a word heard: the light flashes');
   await ev(`(() => { panel.core.listening = false; panel.core.changed(); })()`);
-  c.ok(await sw() === 'switch|off|false|off', 'off again', await sw());
+  c.ok(await sw() === 'switch|off|false|false', 'off again', await sw());
 
-  // the narrator: the voice widget's second switch (no indicator text of its own); a click is its key's press
-  const nar = () => ev(`(() => { const b = document.querySelector('#voice .fw-sw-narrator'); return b && [b.dataset.state, b.dataset.ready, b.querySelector('.fw-sw-word').textContent].join('|'); })()`);
-  c.ok(await ev(`document.querySelectorAll('#voice .fw-switch').length === 2 && !document.querySelector('#band .narrator') && !/select text/.test(document.getElementById('band').textContent)`), 'the voice widget: the mic and the narrator, no "select text"');
-  c.ok(await nar() === 'off|0|off', 'the narrator: off, nothing selected', await nar());
+  // the narrator, always on: its name in the voice card after the mic (no switch, no words); a click is its key's press
+  const nar = () => ev(`(() => { const b = document.querySelector('#voice .fw-narr'); return b && [b.dataset.state, b.dataset.ready].join('|'); })()`);
+  c.ok(await ev(`(() => { const v = document.getElementById('voice'); return v.classList.contains('fw-voicebar') && v.querySelectorAll('.fw-switch').length === 1
+    && v.textContent === 'micnarrator' && !document.querySelector('#band .narrator'); })()`), 'one voice card: [● mic ⟦switch⟧ narrator], no on/off words', await ev(`document.getElementById('voice').textContent`));
+  c.ok(await nar() === 'stopped|0', 'the narrator: stopped, nothing selected (dim)', await nar());
   await ev(`(() => { const r = document.createRange(); r.selectNodeContents(document.getElementById('hint')); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
-  c.ok(await until(`document.querySelector('#voice .fw-sw-narrator').dataset.ready === '1'`), 'text selected: ready, the sentence in its title');
-  c.ok(/1 of \d+: mic starts the dialog/.test(await ev(`document.querySelector('#voice .fw-sw-narrator').title`)), 'its title: n of N and the sentence', await ev(`document.querySelector('#voice .fw-sw-narrator').title`));
+  c.ok(await until(`document.querySelector('#voice .fw-narr').dataset.ready === '1'`), 'text selected: ready');
+  c.ok(/1 of \d+: mic starts the dialog/.test(await ev(`document.querySelector('#voice .fw-narr').title`)), 'its title: n of N and the sentence', await ev(`document.querySelector('#voice .fw-narr').title`));
   await ev(`(() => { window.pressed = 0; fsttmNarrator.press = () => { window.pressed++; }; })()`);
-  await page.mouse('#voice .fw-sw-narrator');
+  await page.mouse('#voice .fw-narr');
   c.ok(await ev(`window.pressed`) === 1, 'a click on it: the narrator\'s press');
   await ev(`fsttmNarrator._set('paused')`);
-  c.ok(await nar() === 'paused|1|paused', 'paused: shown', await nar());
+  c.ok(await nar() === 'paused|1' && await ev(`getComputedStyle(document.querySelector('#voice .fw-narr')).color`) !== await ev(`getComputedStyle(document.querySelector('#voice .fw-switch .fw-sw-label')).color`), 'paused: its colour', await nar());
   await ev(`fsttmNarrator._set('reading')`);
-  c.ok(await nar() === 'on|1|on', 'reading: on', await nar());
+  c.ok(await nar() === 'reading|1', 'reading', await nar());
   await ev(`(() => { delete fsttmNarrator.press; fsttmNarrator.stop(); getSelection().removeAllRanges(); })()`);
 
   // a typed line: the person's row, the reply's (two sentences in talk mode)

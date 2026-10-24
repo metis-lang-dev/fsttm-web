@@ -113,10 +113,10 @@ window.say = text => panel.say(text);
 - **The mic in the page's header.** `micButton: false` leaves the mic out of the text line;
   `micSwitch(panel)` (`lib/switch.js`) is the panel's mic as a header switch: on / off /
   opening, its light flashing on each word heard. `panel.subscribe(fn)` is how a widget
-  follows the panel: `fn({state})`, `fn({event})`. `narratorSwitch(narrator, {key})` is the
-  narrator's (below) as a switch beside it: on while reading, paused, held for the dialog, a
-  click its key's press, the sentence and n of N in its title; `voiceWidget(panel, {narrator,
-  key})` is the two as the header's one widget. `toggleSwitch({label, onChange})` is the switch
+  follows the panel: `fn({state})`, `fn({event})`. `narratorLabel(narrator, {key})` is the
+  narrator (below), always on: its name, coloured while it reads, pauses or is held for the
+  dialog, a click its key's press, the sentence and n of N in its title; `voiceWidget(panel,
+  {narrator, key})` is the header's one card: [● mic ⟦switch⟧ narrator], no on/off words. `toggleSwitch({label, onChange})` is the switch
   for anything else.
 - `meta: true` shows each row's small print: the input's source and the floor, a
   narration's kind and form. `narrate(frame)` says which narrations are voiced (default:
@@ -151,7 +151,7 @@ dialog; it only wraps the dialog's `BrowserTTS` to know when the dialog speaks.
 const narrator = new Narrator({ tts, rate: 1.3 });      // tts: the dialog's BrowserTTS — its voice; rate: the narrator's own (null: the dialog's)
 attachSelection(narrator, document);                     // selectionchange: a new non-empty selection RESETS the narrator to it (stopped, at its first sentence)
 attachKey(narrator, document, { key: 'F8' });            // press: stopped → reading · reading → paused · paused → reading; hold ≥ 600 ms or a double press: stop
-header.append(voiceWidget(panel, { narrator }).el);     // the switch beside the mic (lib/switch.js); or narratorView(el, narrator): the old indicator (lib/narrator.css)
+header.append(voiceWidget(panel, { narrator }).el);     // one card: [● mic ⟦switch⟧ narrator] (lib/switch.js); or narratorView(el, narrator): the old indicator (lib/narrator.css)
 ```
 
 - **States:** `stopped`, `reading`, `paused`, `yielding`. A pause cuts the sentence at the word it
