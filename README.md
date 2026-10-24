@@ -61,7 +61,8 @@ In a browser without a bundler, an import map points the names at `lib/`
   still, the recognizer never hears her: `cancelledMic()` opens the mic with
   the browser's echo canceller and `attachRecognizer(rec, dialog, { track })`
   has the recognizer listen to it (`start(track)`, newer Chrome; the raw mic
-  where refused). `web/mic.html` measures both on a machine. A short stop
+  where refused); the textual echo rejection is then off (`textEcho`), as it
+  could only drop the user's words. `web/mic.html` measures both on a machine. A short stop
   phrase cuts at once, and is never echo. "Continue"
   resumes a cut reply from the cut word, with no new LLM call.
 - **The heard-text invariant.** On a cut, the dialog history keeps only what

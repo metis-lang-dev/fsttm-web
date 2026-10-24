@@ -174,10 +174,14 @@ async function backlog(c, lines = LINES) {
   const track = { label: 'mic (cancelled)' };
   const rec = { starts: [], start(...a) { this.starts.push(a.length); }, stop() {} };
   const ctl = attachRecognizer(rec, dlg, { track }); rec.onend();
-  check('start(track) at start and at every restart', rec.starts.join() === '1,1' && ctl.track === track && log.some(([k, f]) => k === 'rec_track' && f.used), JSON.stringify([rec.starts, log]));
+  check('start(track) at start and at every restart, the text echo off', rec.starts.join() === '1,1' && ctl.track === track && dlg.textEcho === false && log.some(([k, f]) => k === 'rec_track' && f.used), JSON.stringify([rec.starts, log]));
   const old = { starts: [], start(...a) { if (a.length) throw new TypeError('no track'); this.starts.push(0); }, stop() {} };
   log.length = 0; const ctl2 = attachRecognizer(old, dlg, { track }); old.onend();
-  check('refused: the raw mic, logged once', old.starts.join() === '0,0' && ctl2.track === null && log.filter(([k]) => k === 'rec_track').length === 1, JSON.stringify([old.starts, log]));
+  check('refused: the raw mic, logged once, the text echo on', old.starts.join() === '0,0' && ctl2.track === null && dlg.textEcho === true && log.filter(([k]) => k === 'rec_track').length === 1, JSON.stringify([old.starts, log]));
+  // the user's bench (2026-10-24 12.2 s): "How are you today" dropped as her "…chat with you today" on the cancelled track
+  const c = make(); c.d.textEcho = false; c.d.say(["Hello there! I'm so happy to chat with you today."], 'reply'); await tick(); c.adv(1500);
+  c.d.interim('How are you today'); await c.d.final('How are you today');
+  check('the text echo off: words like hers are the user\'s', c.calls.join() === 'How are you today', c.calls);
 }
 console.log(`${pass}/${pass + fail} echo checks`);
 process.exit(fail ? 1 : 0);
