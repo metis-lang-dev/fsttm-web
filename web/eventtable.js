@@ -101,11 +101,11 @@ export function rows() {
       await c.d.final('hello there'); c.d.speechStart(); c.d.interim('you said hello there');
       return `${c.d.state} speaking=${c.tts.speaking} echo=${c.bench.events.filter(e => e.kind === 'echo').length}`;
     }, 'BOTHs speaking=true echo=1'],
-    ['interim = the echo so far + user words (on-device grows one interim)', 'the user words cut; the echo part is not theirs', async c => {
+    ['interim = the echo so far + user words (on-device grows one interim)', 'the user words cut, whole; the echo part before them is not theirs', async c => {
       await c.d.final('hello there'); c.d.speechStart(); c.d.interim('you said hello there that is'); const mid = c.tts.speaking;
       c.d.interim('you said hello there that is go to the kitchen');
       return `echo first=${mid} → ${c.d.state} speaking=${c.tts.speaking} cut on "${c.bench.events.find(e => e.kind === 'cut')?.interim}"`;
-    }, 'echo first=true → USER speaking=false cut on "go the kitchen"'],
+    }, 'echo first=true → USER speaking=false cut on "go to the kitchen"'],
     ['final of our own words just after the TTS ended', 'echo: dropped, never answered (the feedback loop)', async c => {
       await c.d.final('hello there'); c.tts.finish(); c.adv(900);
       await c.d.final('you said hello there that is a long enough reply to be one sentence');

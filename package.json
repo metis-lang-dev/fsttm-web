@@ -28,6 +28,6 @@
   "scripts": {
     "build": "npx tailwindcss@3.4.17 -c tailwind.config.cjs -i web/src/input.css -o web/styles.css --minify",
     "watch": "npx tailwindcss@3.4.17 -c tailwind.config.cjs -i web/src/input.css -o web/styles.css --watch",
-    "test": "node test/run.mjs && node test/dialog.mjs && node test/panel.mjs && node test/ws.mjs && node test/narrator.mjs"
+    "test": "node test/run.mjs && node test/dialog.mjs && node test/echo.mjs && node test/panel.mjs && node test/ws.mjs && node test/narrator.mjs"
   }
 }

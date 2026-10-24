@@ -53,7 +53,12 @@ In a browser without a bundler, an import map points the names at `lib/`
   (recognizer, tts, llm, log). The same event table runs scripted in node
   (`test/dialog.mjs`) and in Chrome (`?selftest`). Barge-in is a policy
   (`words` / `energy` / `none`). A transcript that is only the system's own
-  speech is dropped as echo. A short stop phrase cuts at once. "Continue"
+  speech is dropped as echo, and the echo before the user's words is cut off
+  them. The recognizer re-spells what it hears ("countertop 3" → "counter
+  top three"), so echo is measured on letters, not tokens: numbers spelled
+  out, character trigrams found in a sentence (or two) of what was said in
+  the last 12 s (`ECHO`, `echoShare`, `pastEcho`; `test/echo.mjs`). A short
+  stop phrase cuts at once, and is never echo. "Continue"
   resumes a cut reply from the cut word, with no new LLM call.
 - **The heard-text invariant.** On a cut, the dialog history keeps only what
   was heard, up to the cut word, and the unsaid rest stays out of the
@@ -212,7 +217,7 @@ Ctrl+Shift+R.
 ## Tests
 
 ```
-npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table) + test/panel.mjs (the panel's logic) + test/ws.mjs (the wire's adapter) + test/narrator.mjs (the narrator on a stub synth beside the dialog's TTS)
+npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table) + test/echo.mjs (the echo measure on re-spelled echoes, and a narration backlog) + test/panel.mjs (the panel's logic) + test/ws.mjs (the wire's adapter) + test/narrator.mjs (the narrator on a stub synth beside the dialog's TTS)
 pytest test/test_python.py       # the package: one source, the stub backend, the mount
 ```
 
