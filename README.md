@@ -97,9 +97,7 @@ window.say = text => panel.say(text);
   the backend has `modes`: `setReply(v)`; `turn(id, text, mode)` gets it). The mic and the
   voice switch sit by the text line. `controls: false` hides the strip.
 - **The sections**, each a `<details>`, closed until opened; the open ones are kept per
-  page (`storeKey`, the path by default). Or each in the page's own element, a dock or a
-  drawer: `sectionsIn: {floor: el, …}`, drawn while the page says it is open
-  (`showSection(name, open)`; the reference page's docks):
+  page (`storeKey`, the path by default):
   - **floor**: the floor machine (`fsmview.js`), the dwell, the last states, §3.2's costs;
   - **state**: floor, attention, channel, mode, reply, barge-in, recognizer (the
     echo-cancelled track or the raw mic, on-device or cloud), voice; then the numbers the
@@ -107,6 +105,11 @@ window.say = text => panel.say(text);
     reply time, the FREEu dwell, the seconds spoken;
   - **turns**: each turn's mode, words, first token, reply, dwell and how it ended;
   - **events**: the dialog log, capped, with **save (JSONL)** (every event, timed) and **clear**.
+- **The dialog's own part in a tools drawer.** `dialogIn: el` puts the floor, barge-in,
+  attention and the sections (as cards) in the page's element, a drawer the page may hide;
+  the chat keeps the reply mode, the log and the text line. `showDialog(shown)`: while the
+  drawer is hidden or folded nothing is drawn and the floor does not tick (the reference
+  page's DIALOG drawer).
 - **The mic in the page's header.** `micButton: false` leaves the mic out of the text line;
   `micSwitch(panel)` (`lib/switch.js`) is the panel's mic as a header switch: on / off /
   opening, its light flashing on each word heard. `panel.subscribe(fn)` is how a widget
@@ -229,11 +232,22 @@ relay)` serves the hosts at `/host` (`examples/serve.py` has both). At a termina
 `python -m fsttm_web.chat ws://127.0.0.1:8397/host`: lines are the person's, `/system …`
 speaks as her, `/ctl barge_in=energy voice=0` sets the strip, `/events` shows the events.
 
-A backend without a socket (llama-server) carries no backchannel, so the page opens one of
-its own: `new Panel(el, { hostLink })`, a `WsBackend` on a Relay's `/page`
-(`fsttm_web.aiohttp.page_route`; `host` is then on by default). `python -m fsttm_web.chat
---serve 8395` is that Relay with the terminal as its host (other hosts at `/host`); `run.sh`
-starts it (below).
+**The host's tool: any page's dialog from a terminal, no mic.** Whatever the page's backend
+(llama-server has no socket for it), the panel opens the backchannel on a socket of its own
+when the page's URL has `?fw_host`:
+
+```
+fsttm-chat                       # or python -m fsttm_web.chat (needs the [aiohttp] extra); port 8395
+# open the page with ?fw_host    (?fw_host=8396 for fsttm-chat 8396; ?fw_host=ws://…/page)
+```
+
+A line typed is the person's (the panel's one entry, as if heard; `/user …` the same),
+`/system …` speaks as her, `/quiet …` shows her words, `/ctl barge_in=energy …` sets the
+strip, `/events` shows the events, `/quit`. The page's rows and state print back. It works on
+every page with the panel (the reference page, a console's dock, the world page): `hostParam`
+names the URL's key (`'fw_host'`; null: never). The panel's `hostLink` is that socket
+(`hostSocket(url)`, opened again when it closes); a page may give its own. `fsttm-chat` is a
+Relay (`page_route` at `/page`, `host_route` at `/host` for a test's `Chat.connect`).
 
 ## Packages: JS and Python, one source
 
@@ -273,14 +287,8 @@ assets, made at build time.
 MODEL=<gemma4 gguf> ./run.sh     # llama-server serving the page: http://localhost:8393
 ```
 
-At a terminal, run.sh keeps the terminal as the host's backchannel: llama-server runs in
-the background (its log in `$TMPDIR/fsttm-web-llama-PORT.log`), and what you type is the
-person's line in the page, whose rows print back (`/system …`, `/quiet …`, `/ctl …`,
-`/events`, `/quit`; Ctrl+C stops both). It is `python -m fsttm_web.chat --serve` on
-PORT+2 (`HOST_PORT`): the page finds it through `web/assets/host.json`, connects by
-itself (and again after a restart of the terminal), and shows HOST on / waiting in the
-band. It needs a python with aiohttp (`PY=…`, else the `.venv` beside the checkout, or
-python3). `HOST=0`, or stdin not a terminal: llama-server alone, as before.
+To type into it from a terminal: `fsttm-chat` in another one, and the page opened with
+`?fw_host` (http://localhost:8393/?fw_host); the band shows HOST on / waiting.
 
 The dialog runs from page load: type, or press **mic** (it wakes the
 assistant). **replies: long** (the default) is free conversation, several
@@ -291,10 +299,10 @@ prompt and grammar to `loadAssets`.
 
 The page is one panel (`lib/panel.js`, above) in the consoles' shell (`web/vendor/shell.*`,
 copies of metis-loop's: the band, the docks and their strip, the splitter): the chat on the
-left, aligned with the band; the floor, the state and the events in the docks (the strip
-shows and hides them, a header folds one, the layout is kept); the mic switch in the band.
-The strip sets barge-in, attention and the replies. `web/app.js` only chooses the backend,
-the host link, the docks, the narrator (F8) and runs `?selftest`.
+left, aligned with the band, with the replies (long / short); one tools drawer, DIALOG,
+with the floor, barge-in and attention and the floor / state / events cards (the strip
+shows and hides it, its header folds it, the layout is kept); the mic switch in the band.
+`web/app.js` only chooses the backend, the drawer, the narrator (F8) and runs `?selftest`.
 
 URL options:
 - `?asleep`: start asleep, so the wake word comes first.
@@ -306,9 +314,9 @@ URL options:
 - `?backend=llama|ws|stub`: force a backend; `stub` is in the page (`web/backend/stub.js`), no server.
 - `?narrate=all|none`, `?narrate_rate=1.2`, `?narrate_key=F9`: the narrations voiced, the narrator's rate and key.
 - `?selftest`: the event table in this Chrome.
-- `?host`: the backchannel on a ws backend's socket; `?host=ws://…/page`: on a Relay's (else run.sh's, by itself).
+- `?host`: the backchannel on a ws backend's socket; `?fw_host`: on the `fsttm-chat` tool's (above).
 
-The events dock's **save (JSONL)** exports every dialog event, timed.
+The events card's **save (JSONL)** exports every dialog event, timed.
 
 The reference page's styles are the shell's (panel.html and mic.html keep their own inline).
 `web/styles.css` (Tailwind 3.4.17, `npm run build` from `web/src/input.css`) is the old page's
@@ -322,7 +330,7 @@ Ctrl+Shift+R.
 npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table) + test/echo.mjs (the echo measure on re-spelled echoes, and a narration backlog) + test/panel.mjs (the panel's logic, the backchannel) + test/bench.mjs (the numbers kept as events come) + test/ws.mjs (the wire's adapter) + test/narrator.mjs (the narrator on a stub synth beside the dialog's TTS)
 pytest test/test_python.py       # the package: one source, the stub backend, the mount, Chat and the Relay
 node test/page_e2e.mjs           # the browser suite (node >= 22, Chrome): the reference page as one panel on ?backend=stub
-pytest test/test_host_e2e.py     # the host's backchannel: examples/serve.py + the page in headless Chrome, driven by fsttm_web.chat; and run.sh's terminal (--serve) typing into a page without a socket
+pytest test/test_host_e2e.py     # the host's backchannel: examples/serve.py + the page in headless Chrome, driven by fsttm_web.chat; and fsttm-chat typing into a page without a socket (?fw_host)
 pytest test/test_shell_copies.py # web/vendor/shell.* equal the consoles' past their header
 ```
 

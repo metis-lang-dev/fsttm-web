@@ -2,7 +2,7 @@
 // the event table's fake TTS: one entry for every input, the intent chat's rows, the
 // narration, a cut back to the backend, the two channels and the quasimode.
 import { readFile } from 'node:fs/promises';
-import { PanelCore, holdable, BARGE_IN, SECTIONS } from '../lib/panel.js';
+import { PanelCore, holdable, BARGE_IN, SECTIONS, hostURL, hostSocket } from '../lib/panel.js';
 import { Attention } from '../lib/attention.js';
 import { FakeTTS } from '../web/eventtable.js';
 
@@ -296,6 +296,31 @@ const rows = p => p.rows.map(r => `${r.who}${r.via ? ':' + r.via : ''}${r.channe
   const link = { send() {}, onFrame: null };
   const { p } = make({ hostLink: link, host: false });
   ok(p.host === null, 'hostLink with host false: frames heard, nothing sent back');
+}
+// the host's tool on the page's URL (?fw_host), and its socket
+{
+  ok(hostURL('fw_host', '?a=1') === null, 'no ?fw_host: no tool');
+  ok(hostURL('fw_host', '?fw_host') === 'ws://127.0.0.1:8395/page', '?fw_host: the tool on 8395');
+  ok(hostURL('fw_host', '?x&fw_host=8396') === 'ws://127.0.0.1:8396/page', '?fw_host=PORT');
+  ok(hostURL('fw_host', '?fw_host=' + encodeURIComponent('ws://h:1/page')) === 'ws://h:1/page', '?fw_host=ws://…');
+  ok(hostURL(null, '?fw_host') === null, 'hostParam null: never');
+  const socks = [];
+  class FakeWS { constructor(u) { this.url = u; this.readyState = 0; this.sent = []; socks.push(this); } send(m) { this.sent.push(JSON.parse(m)); } close() { this.readyState = 3; this.onclose?.(); } }
+  const link = hostSocket('ws://x/page', { reconnect: 5, WebSocketImpl: FakeWS });
+  const { p } = make({ hostLink: link });
+  let threw = false; try { link.send({ ev: 'x' }); } catch { threw = true; }
+  ok(threw && typeof link.onOpen === 'function', 'hostSocket: closed until open; the panel takes onOpen');
+  socks[0].readyState = 1; socks[0].onopen();
+  ok(socks[0].sent.some(f => f.ev === 'state'), 'open: the state at once');
+  socks[0].onmessage({ data: JSON.stringify({ ev: 'chat', who: 'user', text: 'go to the lamp' }) });
+  for (let i = 0; i < 5; i++) await tick();
+  ok(p.rows.some(r => r.via === 'host' && r.text === 'go to the lamp'), 'a line from the tool: the one entry');
+  socks[0].readyState = 3; socks[0].onclose();
+  await new Promise(r => setTimeout(r, 20));
+  ok(socks.length === 2, 'closed: opened again');
+  link.close();
+  await new Promise(r => setTimeout(r, 20));
+  ok(socks.length === 2, 'close(): not again');
 }
 
 await tick();

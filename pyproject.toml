@@ -20,6 +20,10 @@ dependencies = []
 [project.optional-dependencies]
 aiohttp = ["aiohttp>=3.9"]
 
+[project.scripts]
+# the host's tool: type into any page's dialog panel from a terminal (?fw_host on the page's URL); needs [aiohttp]
+fsttm-chat = "fsttm_web.chat:cli"
+
 [tool.hatch.version]
 path = "python/fsttm_web/__init__.py"
 

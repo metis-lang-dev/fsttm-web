@@ -39,5 +39,5 @@ def test_the_shell_is_the_consoles(name, other):
 def test_the_page_loads_the_shell():
     html = (WEB / "index.html").read_text()
     assert 'href="vendor/shell.css"' in html and 'src="vendor/shell.js"' in html
-    for d in ("floor", "state", "events"):
+    for d in ("dialog",):
         assert re.search(r'class="dock" id="dock-%s" data-dock="%s"' % (d, d), html) and 'data-strip="%s"' % d in html

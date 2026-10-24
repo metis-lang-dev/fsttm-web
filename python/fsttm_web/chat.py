@@ -25,9 +25,10 @@ From another process, through a Relay on the server (fsttm_web.aiohttp.host_rout
 
 and at a terminal: python -m fsttm_web.chat ws://127.0.0.1:8397/host
 
-Where the page's backend holds no socket (llama-server), the terminal is the Relay itself:
-python -m fsttm_web.chat --serve 8395 serves /page (the page's hostLink: ?host=ws://127.0.0.1:8395/page,
-or run.sh's assets/host.json) and /host (other hosts, a test's Chat.connect), and types as a host.
+The host's tool, for any page with the dialog panel (the reference page, a console, the world page),
+whatever its backend: fsttm-chat (python -m fsttm_web.chat) serves /page on 8395 and types as the
+host; the page connects by itself when its URL has ?fw_host (?fw_host=PORT, ?fw_host=ws://…/page:
+the panel's hostParam). Other hosts (a test's Chat.connect) at /host. No mic needed.
 """
 import asyncio
 import json
@@ -214,8 +215,10 @@ class Relay:
 
 
 # ── the CLI: stdin lines as the person, the page's frames printed ───────
-HELP = """lines are the person's; /system <words> speaks as her (/quiet <words>: shown only);
-/ctl barge_in=energy voice=0 attention=asleep reply=talk mic=1; /events toggles the events; /quit"""
+HELP = """a line (or /user <words>) is the person's: the panel's one entry, as if heard
+/system <words>   her words, spoken      /quiet <words>   her words, shown only
+/ctl barge_in=energy voice=0 attention=asleep reply=talk mic=1   the strip
+/events           the events on/off      /help            this      /quit"""
 
 
 def _value(v):
@@ -255,7 +258,10 @@ async def serve(port, bind="127.0.0.1"):
     runner = web.AppRunner(app)
     await runner.setup()
     await web.TCPSite(runner, bind, port).start()
-    print(f"the host's terminal: pages at ws://{bind}:{port}/page, hosts at ws://{bind}:{port}/host\n{HELP}", file=sys.stderr)
+    url = f"ws://{bind}:{port}/page"
+    hint = "?fw_host" if port == PORT else f"?fw_host={port}"
+    print(f"fsttm-chat: open the page with {hint} on its URL (any page with the dialog panel; {url}); "
+          f"other hosts at ws://{bind}:{port}/host\n{HELP}", file=sys.stderr)
     try:
         await repl(chat, relay)
     finally:
@@ -321,8 +327,10 @@ async def repl(chat, relay=None):
                 break
             if line == "/events":
                 events = not events
-            elif relay is not None and not relay.pages and (not line.startswith("/") or line.split()[0] in ("/system", "/quiet", "/ctl")):
-                print("-- no page yet: open the page (it connects by itself)", file=sys.stderr)
+            elif relay is not None and not relay.pages and (not line.startswith("/") or line.split()[0] in ("/user", "/system", "/quiet", "/ctl")):
+                print("-- no page yet: open one with ?fw_host on its URL (it connects by itself)", file=sys.stderr)
+            elif line.startswith("/user "):
+                await chat.user(line[6:])
             elif line.startswith("/system "):
                 await chat.system(line[8:])
             elif line.startswith("/quiet "):
@@ -339,15 +347,26 @@ async def repl(chat, relay=None):
         await chat.close()
 
 
-if __name__ == "__main__":
-    a = sys.argv[1:]
+PORT = 8395           # the panel's ?fw_host without a port
+
+
+def cli(argv=None):
+    """fsttm-chat [PORT [BIND]]: the host's tool (pages at /page, ?fw_host); fsttm-chat ws://…/host: a
+    host of another server's Relay (examples/serve.py's /host)."""
+    a = sys.argv[1:] if argv is None else argv
+    if a[:1] == ["--serve"]:
+        a = a[1:]
     try:
-        if len(a) in (2, 3) and a[0] == "--serve":
-            asyncio.run(serve(int(a[1]), *a[2:]))
-        elif len(a) == 1 and not a[0].startswith("-"):
+        if not a or (a[0].isdigit() and len(a) <= 2):
+            asyncio.run(serve(int(a[0]) if a else PORT, *a[1:]))
+        elif len(a) == 1 and a[0].startswith(("ws://", "wss://")):
             asyncio.run(main(a[0]))
         else:
-            sys.exit("python -m fsttm_web.chat ws://HOST:PORT/host   (a server with fsttm_web.aiohttp.host_route)\n"
-                     "python -m fsttm_web.chat --serve PORT [BIND]  (a Relay of its own: the page's hostLink at /page)")
+            sys.exit(f"fsttm-chat [PORT [BIND]]   the host's tool: open a page with ?fw_host (PORT {PORT}) or ?fw_host=PORT\n"
+                     "fsttm-chat ws://HOST:PORT/host   a host of a server's Relay (fsttm_web.aiohttp.host_route)")
     except KeyboardInterrupt:
         pass
+
+
+if __name__ == "__main__":
+    cli()

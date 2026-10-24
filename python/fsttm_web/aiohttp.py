@@ -26,8 +26,8 @@ serves the hosts at /host (Chat.connect, python -m fsttm_web.chat ws://…/host)
         return sock
     host_route(app, relay)
 
-Where the page's backend holds no socket (llama-server: run.sh), the page opens one to a Relay of
-its own (the panel's hostLink): page_route serves it (python -m fsttm_web.chat --serve).
+Where the page.s backend holds no socket (llama-server), or a terminal drives it, the page opens one to a Relay of
+its own (the panel's hostLink): page_route serves it (fsttm-chat, python -m fsttm_web.chat).
 """
 from aiohttp import WSMsgType, web
 

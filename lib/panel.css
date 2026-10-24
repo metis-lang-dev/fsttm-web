@@ -60,10 +60,8 @@
 .fw-panel .fw-tools { display: flex; gap: 10px; }
 .fw-panel .fw-link { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-decoration: underline; opacity: .7; cursor: pointer; }
 .fw-panel .fw-events { max-height: 18rem; overflow: auto; font-size: 10px; line-height: 1.25; overflow-wrap: anywhere; opacity: .8; }
-/* a section in the page's own element (sectionsIn: a dock, a drawer): it fills it, the log and the turns scroll inside */
-.fw-panel.fw-part { height: 100%; overflow: auto; }
-.fw-panel.fw-part-events { overflow: hidden; }
-.fw-panel.fw-part > .fw-body { padding: 0; }
-.fw-panel.fw-part-events > .fw-body { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.fw-panel.fw-part .fw-events { max-height: none; flex: 1 1 auto; min-height: 0; }
-.fw-panel.fw-part .fw-scroll { max-height: none; }
+/* the dialog's part in the page's drawer (dialogIn): its bar, then the sections as cards, which scroll inside it */
+.fw-panel.fw-part { height: 100%; }
+.fw-panel.fw-part > .fw-bar { flex: none; }
+.fw-panel.fw-part > .fw-bar .fw-floor { margin-left: 0; margin-right: auto; }
+.fw-panel.fw-part .fw-sections { flex: 1 1 auto; max-height: none; }

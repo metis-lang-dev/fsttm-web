@@ -67,6 +67,7 @@ def test_a_host_drives_the_page_and_reads_it():
             s = await chat.expect(lambda f: f["text"].startswith("You said: hello there.") and "spoken" in f["tags"],
                                   ev="chat", who="system", timeout=20)
             assert s["via"] == "backend" and s["id"] == u["id"]
+            await chat.expect(ev="event", kind="speak", since=m, timeout=5)   # the speak event follows the row's spoken tag
             kinds = {f["kind"] for f in chat.frames if f["ev"] == "event"}
             assert {"final", "heard", "llm", "speak", "fsttm"} <= kinds, kinds   # the events, mirrored
 
@@ -107,9 +108,9 @@ def test_a_host_drives_the_page_and_reads_it():
 
 @pytest.mark.skipif(not CHROME, reason="no Chrome (CHROME=…)")
 def test_the_terminal_drives_a_page_without_a_socket():
-    """run.sh's terminal: python -m fsttm_web.chat --serve (a Relay of its own) and the page on a backend
-    without a socket (here the stub in the page), its hostLink at /page: lines typed on stdin are the
-    person's, the page's rows print on stdout."""
+    """The host's tool: fsttm-chat (python -m fsttm_web.chat PORT, a Relay of its own) and a page on a
+    backend without a socket (here the stub in the page) opened with ?fw_host=PORT: lines typed on stdin
+    are the person's, the page's rows print on stdout."""
     import sys
     from aiohttp import web
     from fsttm_web.aiohttp import mount
@@ -120,7 +121,7 @@ def test_the_terminal_drives_a_page_without_a_socket():
         await runner.setup()
         await web.TCPSite(runner, "127.0.0.1", port).start()
         env = {**os.environ, "PYTHONPATH": str(REPO / "python") + os.pathsep + os.environ.get("PYTHONPATH", "")}
-        term = await asyncio.create_subprocess_exec(sys.executable, "-m", "fsttm_web.chat", "--serve", str(hport),
+        term = await asyncio.create_subprocess_exec(sys.executable, "-m", "fsttm_web.chat", str(hport),
                                                     stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
                                                     stderr=asyncio.subprocess.PIPE, env=env)
         prof = tempfile.mkdtemp(prefix="fw-term-chrome-")
@@ -144,7 +145,7 @@ def test_the_terminal_drives_a_page_without_a_socket():
             await term.stdin.drain()
             await until(lambda: any("no page yet" in l for l in err), "a line with no page: said so")
             chrome = subprocess.Popen([CHROME, "--headless=new", f"--user-data-dir={prof}", "--no-first-run",
-                                       f"http://127.0.0.1:{port}/?backend=stub&voice=0&host=ws://127.0.0.1:{hport}/page"],
+                                       f"http://127.0.0.1:{port}/?backend=stub&voice=0&fw_host={hport}"],
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
             await until(lambda: any("pages open: 1" in l for l in err), "the page connected by itself")
             await until(lambda: any(l.startswith("state ") for l in out), "the state on connect")
@@ -152,8 +153,9 @@ def test_the_terminal_drives_a_page_without_a_socket():
             await term.stdin.drain()
             await until(lambda: any("user · host: hello there" in l for l in out), "the typed line, the person's row")
             await until(lambda: any("system · backend: You said: hello there." in l for l in out), "the stub's answer printed")
-            term.stdin.write(b"/quiet The door is open.\n/ctl barge_in=energy\n")
+            term.stdin.write(b"/user and again\n/quiet The door is open.\n/ctl barge_in=energy\n")
             await term.stdin.drain()
+            await until(lambda: any("user · host: and again" in l for l in out), "/user: the person's line")
             await until(lambda: any("system · host: The door is open." in l for l in out), "her words, as the host's")
             await until(lambda: any(l.startswith("state ") and "barge_in=energy" in l for l in out), "ctl: the state back")
             term.stdin.write(b"/quit\n")
