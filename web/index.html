@@ -5,11 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fsttm-web</title>
 <!-- the consoles' shell (web/vendor/shell.*: the band, the docks and their strip; copies of metis-loop's), the
-     dialog is lib/panel.js with lib/panel.css, the mic in the band lib/switch.js -->
+     dialog is lib/panel.js with lib/panel.css, the voice in the band (the mic, the narrator) lib/switch.js -->
 <link rel="stylesheet" href="vendor/shell.css">
 <link rel="stylesheet" href="lib/panel.css">
 <link rel="stylesheet" href="lib/switch.css">
-<link rel="stylesheet" href="lib/narrator.css">
 <script src="vendor/shell.js"></script>
 <style>
   /* the dialog in the shell's tokens (one look with the consoles): the chat on the left, the dialog's part in the DIALOG drawer */
@@ -48,8 +47,7 @@
     <span id="mode" hidden></span>
     <span id="sessbar">
       <span id="host" hidden></span>
-      <span id="mic"></span>
-      <span id="narrator" title="select text, then F8"></span>
+      <span id="voice"></span>
       <button id="sayLong" type="button" class="btn" title="a fixed long announcement to talk over">say something long</button>
     </span>
   </div>

@@ -1,6 +1,6 @@
 // page_e2e.mjs — the reference page (web/index.html): one dialog panel in the consoles' shell, in
 // headless Chrome on the stub backend in the page (?backend=stub, voice off): the chat aligned with
-// the band and inside the window; the mic switch in the band; a typed line and its rows; the strip
+// the band and inside the window; the voice widget in the band (the mic switch, the narrator's); a typed line and its rows; the strip
 // (barge-in live on the dialog, the reply mode the backend gets, attention); the DIALOG drawer (the
 // floor, barge-in, attention, the sections as cards), drawn only while shown, kept across a reload;
 // replies in the chat; a backend's narration;
@@ -40,6 +40,22 @@ try {
   c.ok(await ev(`document.querySelector('#band .fw-switch').classList.contains('fw-sw-ping')`), 'a word heard: the light flashes');
   await ev(`(() => { panel.core.listening = false; panel.core.changed(); })()`);
   c.ok(await sw() === 'switch|off|false|off', 'off again', await sw());
+
+  // the narrator: the voice widget's second switch (no indicator text of its own); a click is its key's press
+  const nar = () => ev(`(() => { const b = document.querySelector('#voice .fw-sw-narrator'); return b && [b.dataset.state, b.dataset.ready, b.querySelector('.fw-sw-word').textContent].join('|'); })()`);
+  c.ok(await ev(`document.querySelectorAll('#voice .fw-switch').length === 2 && !document.querySelector('#band .narrator') && !/select text/.test(document.getElementById('band').textContent)`), 'the voice widget: the mic and the narrator, no "select text"');
+  c.ok(await nar() === 'off|0|off', 'the narrator: off, nothing selected', await nar());
+  await ev(`(() => { const r = document.createRange(); r.selectNodeContents(document.getElementById('hint')); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
+  c.ok(await until(`document.querySelector('#voice .fw-sw-narrator').dataset.ready === '1'`), 'text selected: ready, the sentence in its title');
+  c.ok(/1 of \d+: mic starts the dialog/.test(await ev(`document.querySelector('#voice .fw-sw-narrator').title`)), 'its title: n of N and the sentence', await ev(`document.querySelector('#voice .fw-sw-narrator').title`));
+  await ev(`(() => { window.pressed = 0; fsttmNarrator.press = () => { window.pressed++; }; })()`);
+  await page.mouse('#voice .fw-sw-narrator');
+  c.ok(await ev(`window.pressed`) === 1, 'a click on it: the narrator\'s press');
+  await ev(`fsttmNarrator._set('paused')`);
+  c.ok(await nar() === 'paused|1|paused', 'paused: shown', await nar());
+  await ev(`fsttmNarrator._set('reading')`);
+  c.ok(await nar() === 'on|1|on', 'reading: on', await nar());
+  await ev(`(() => { delete fsttmNarrator.press; fsttmNarrator.stop(); getSelection().removeAllRanges(); })()`);
 
   // a typed line: the person's row, the reply's (two sentences in talk mode)
   await page.mouse('#dialog .fw-input .fw-text');

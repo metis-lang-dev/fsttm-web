@@ -19,5 +19,14 @@
 .fw-switch[data-state="error"] .fw-sw-light { background: #f85149; }
 .fw-switch[data-state="error"] .fw-sw-word { color: #f85149; opacity: 1; }
 .fw-switch.fw-sw-ping .fw-sw-light { background: #fff; box-shadow: 0 0 7px var(--fw-sw-on), 0 0 2px #fff; }
+/* the narrator's: paused amber, held for the dialog cyan; dim until text is selected */
+.fw-switch[data-state="paused"] .fw-sw-light { background: #d29922; }
+.fw-switch[data-state="paused"] .fw-sw-word { color: #d29922; opacity: 1; }
+.fw-switch[data-state="yielding"] .fw-sw-light { background: #39c5cf; }
+.fw-switch[data-state="yielding"] .fw-sw-word { color: #39c5cf; opacity: 1; }
+.fw-switch[data-state="paused"] .fw-sw-knob, .fw-switch[data-state="yielding"] .fw-sw-knob { left: 7px; }
+.fw-sw-narrator[data-ready="0"] { opacity: .6; }
+/* the voice widget: the mic and the narrator side by side */
+.fw-voicebar { display: inline-flex; gap: 4px; align-items: center; }
 @keyframes fw-sw-blink { 50% { opacity: .2; } }
 @media (prefers-reduced-motion: reduce) { .fw-sw-track, .fw-sw-knob { transition: none; } .fw-switch[data-state="busy"] .fw-sw-light { animation: none; } }

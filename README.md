@@ -24,7 +24,7 @@ lib/   fsttm.js fsttm.json   the floor machine and its table (the machine as dat
        fsmview.js            the floor machine drawn (the panel's floor section)
        bench.js              every dialog event, timed, and the barge-in numbers (the panel's state and events)
        narrator.js (+css)    the page's selected text read aloud on one key, beside the dialog (below)
-       switch.js (+css)      an on/off switch with its light for a header row; micSwitch(panel): the panel's mic
+       switch.js (+css)      an on/off switch with its light for a header row; voiceWidget: the mic and the narrator
        fixtures/             the floor machine's and attention's cases as data (canonical)
 ```
 
@@ -113,8 +113,11 @@ window.say = text => panel.say(text);
 - **The mic in the page's header.** `micButton: false` leaves the mic out of the text line;
   `micSwitch(panel)` (`lib/switch.js`) is the panel's mic as a header switch: on / off /
   opening, its light flashing on each word heard. `panel.subscribe(fn)` is how a widget
-  follows the panel: `fn({state})`, `fn({event})`. `toggleSwitch({label, onChange})` is the
-  switch for anything else.
+  follows the panel: `fn({state})`, `fn({event})`. `narratorSwitch(narrator, {key})` is the
+  narrator's (below) as a switch beside it: on while reading, paused, held for the dialog, a
+  click its key's press, the sentence and n of N in its title; `voiceWidget(panel, {narrator,
+  key})` is the two as the header's one widget. `toggleSwitch({label, onChange})` is the switch
+  for anything else.
 - `meta: true` shows each row's small print: the input's source and the floor, a
   narration's kind and form. `narrate(frame)` says which narrations are voiced (default:
   all but form R). `onDevice: true` asks for on-device recognition; `micWakes` (default)
@@ -148,11 +151,11 @@ dialog; it only wraps the dialog's `BrowserTTS` to know when the dialog speaks.
 const narrator = new Narrator({ tts, rate: 1.3 });      // tts: the dialog's BrowserTTS — its voice; rate: the narrator's own (null: the dialog's)
 attachSelection(narrator, document);                     // selectionchange: a new non-empty selection RESETS the narrator to it (stopped, at its first sentence)
 attachKey(narrator, document, { key: 'F8' });            // press: stopped → reading · reading → paused · paused → reading; hold ≥ 600 ms or a double press: stop
-narratorView(document.getElementById('narrator'), narrator);   // the indicator: state · n of N · the sentence (lib/narrator.css)
+header.append(voiceWidget(panel, { narrator }).el);     // the switch beside the mic (lib/switch.js); or narratorView(el, narrator): the old indicator (lib/narrator.css)
 ```
 
-- **States:** `stopped`, `reading`, `paused`, `yielding`. A pause cuts the sentence; a resume
-  reads it again from its start. Reading past the last sentence stops; the next press reads
+- **States:** `stopped`, `reading`, `paused`, `yielding`. A pause cuts the sentence at the word it
+  reached (onboundary, else by the time spoken); a resume reads on from that word. Reading past the last sentence stops; the next press reads
   from the top. `narrator.onchange(snapshot)` reports every change.
 - **Yielding:** speechSynthesis is one queue per page, so before the dialog's utterance is
   queued the narrator cuts its own sentence and waits (`yielding`); after the dialog's

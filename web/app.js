@@ -1,8 +1,9 @@
 // app.js — the reference page: one dialog panel (lib/panel.js) in the consoles' shell — the chat
 // on the left, the dialog's own part (the floor, barge-in, attention; the floor machine, the state
-// and the numbers, the event log as cards) in the DIALOG tools drawer, the mic switch
-// (lib/switch.js) in the band — over the backend the page is served with; the host's backchannel
-// (?host on a ws backend, ?fw_host: the fsttm-chat tool, the panel's own); the narrator (F8);
+// and the numbers, the event log as cards) in the DIALOG tools drawer, the voice widget
+// (lib/switch.js: the mic switch, the narrator's, F8) in the band — over the backend the page is
+// served with; the host's backchannel (?host on a ws backend, ?fw_host: the fsttm-chat tool, the
+// panel's own);
 // ?selftest (the event table in this Chrome + what this Chrome offers). Everything else is the panel's.
 import { loadAssets, LlamaBackend } from './backend/llama.js';
 import { connect } from './backend/ws.js';
@@ -11,8 +12,8 @@ import { Attention } from 'fsttm-web/attention';
 import { cancelledMic } from 'fsttm-web/dialog';
 import { BrowserTTS } from 'fsttm-web/tts';
 import { Panel, probeLocal } from 'fsttm-web/panel';
-import { micSwitch } from 'fsttm-web/switch';
-import { Narrator, attachSelection, attachKey, narratorView } from 'fsttm-web/narrator';
+import { voiceWidget } from 'fsttm-web/switch';
+import { Narrator, attachSelection, attachKey } from 'fsttm-web/narrator';
 import { runEventTable } from './eventtable.js';
 
 const $ = id => document.getElementById(id);
@@ -64,7 +65,15 @@ const panel = new Panel($('dialog'), {
   },
 });
 window.panel = panel;
-$('mic').replaceWith(Object.assign(micSwitch(panel).el, { id: 'mic' }));
+
+// the narrator: the page's selection read aloud on F8 (or its switch), floor-independent, yielding to the dialog's speech
+const key = q.get('narrate_key') ?? 'F8';
+const narrator = new Narrator({ tts, rate: Number(q.get('narrate_rate')) || null });
+attachSelection(narrator, document);
+attachKey(narrator, document, { key });
+window.fsttmNarrator = narrator;
+// the voice in the band: the mic and the narrator, one widget
+$('voice').replaceWith(Object.assign(voiceWidget(panel, { narrator, key }).el, { id: 'voice' }));
 
 // the tools drawer: the strip shows and hides DIALOG, its header folds it; the panel draws only while it is open
 const docks = MetisShell.docks({ names: ['dialog'], key: 'fsttm-web.docks.v2', defaults: { dialog: { shown: true, open: true } },
@@ -86,12 +95,6 @@ window.fsttmBench = panel.core.bench;
 window.fsttmBackend = backend;
 if (want === 'ws' || ws) panel.note(`backend: ${wsURL}`);
 
-// the narrator: the page's selection read aloud on F8, floor-independent, yielding to the dialog's speech
-const narrator = new Narrator({ tts, rate: Number(q.get('narrate_rate')) || null });
-attachSelection(narrator, document);
-attachKey(narrator, document, { key: q.get('narrate_key') ?? 'F8' });
-narratorView($('narrator'), narrator, { key: q.get('narrate_key') ?? 'F8' });
-window.fsttmNarrator = narrator;
 
 $('sayLong').onclick = () => panel.core.dialog.announce('Here is a long announcement so you can talk over me. ' +
   'The kitchen is quiet, the pot is empty, and nothing has been ordered for a while, so I will keep talking until somebody interrupts me.');
