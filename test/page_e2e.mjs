@@ -40,6 +40,12 @@ try {
   c.ok(await ev(`document.querySelector('#band .fw-switch').classList.contains('fw-sw-ping')`), 'a word heard: the light flashes');
   await ev(`(() => { panel.core.listening = false; panel.core.changed(); })()`);
   c.ok(await sw() === 'switch|off|false|false', 'off again', await sw());
+  // F9 is the mic's key: a press toggles it, as a click on the switch would
+  await ev(`(() => { window.toggled = 0; panel.toggleMic = () => { window.toggled++; }; })()`);
+  await page.mouse('#hint', false);
+  await page.key('F9');
+  c.ok(await ev(`window.toggled`) === 1 && /\(F9\)/.test(await ev(`document.querySelector('#voice .fw-switch').title`)), 'F9 toggles the mic, its title says so', await ev(`window.toggled`));
+  await ev(`delete panel.toggleMic`);
 
   // the narrator, always on: its name in the voice card after the mic (no switch, no words); a click is its key's press
   const nar = () => ev(`(() => { const b = document.querySelector('#voice .fw-narr'); return b && [b.dataset.state, b.dataset.ready].join('|'); })()`);

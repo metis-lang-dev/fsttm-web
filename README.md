@@ -116,7 +116,8 @@ window.say = text => panel.say(text);
   follows the panel: `fn({state})`, `fn({event})`. `narratorLabel(narrator, {key})` is the
   narrator (below), always on: its name, coloured while it reads, pauses or is held for the
   dialog, a click its key's press, the sentence and n of N in its title; `voiceWidget(panel,
-  {narrator, key})` is the header's one card: [● mic ⟦switch⟧ narrator], no on/off words. `toggleSwitch({label, onChange})` is the switch
+  {narrator, key, micKey})` is the header's one card: [● mic ⟦switch⟧ narrator], no on/off words;
+  F9 turns the mic on and off (`micKey`), F8 is the narrator's. `toggleSwitch({label, onChange})` is the switch
   for anything else. Their "on" is green (`--fw-switch-on`), not the page's accent.
 - `meta: true` shows each row's small print: the input's source and the floor, a
   narration's kind and form. `narrate(frame)` says which narrations are voiced (default:
@@ -315,7 +316,7 @@ URL options:
 - `?voice=0`: the voice off (rows only).
 - `?raw_mic`: the recognizer on the raw mic (her voice dropped by text), not the echo-cancelled track.
 - `?backend=llama|ws|stub`: force a backend; `stub` is in the page (`web/backend/stub.js`), no server.
-- `?narrate=all|none`, `?narrate_rate=1.2`, `?narrate_key=F9`: the narrations voiced, the narrator's rate and key.
+- `?narrate=all|none`, `?narrate_rate=1.2`, `?narrate_key=F10`: the narrations voiced, the narrator's rate and key.
 - `?selftest`: the event table in this Chrome.
 - `?host`: the backchannel on a ws backend's socket; `?fw_host`: on the `fsttm-chat` tool's (above).
 

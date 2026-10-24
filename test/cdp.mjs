@@ -21,7 +21,7 @@ function file(path) {
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.jsonl': 'application/json', '.png': 'image/png' };
 export const sleep = ms => new Promise(r => setTimeout(r, ms));
-const CODES = { Enter: 13, Escape: 27, Tab: 9, ArrowRight: 39, ArrowLeft: 37, ArrowUp: 38, ArrowDown: 40 };
+const CODES = { Enter: 13, Escape: 27, Tab: 9, F8: 119, F9: 120, ArrowRight: 39, ArrowLeft: 37, ArrowUp: 38, ArrowDown: 40 };
 
 // open(path): the page at path (as the mount serves it: 'index.html?backend=stub'), its ready flag awaited
 export async function open(path, { width = 1200, height = 900 } = {}) {
