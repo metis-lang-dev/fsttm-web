@@ -4,103 +4,51 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fsttm-web</title>
-<!-- Tailwind, no bundler: npm run build (src/input.css → styles.css) -->
+<!-- Tailwind, no bundler: npm run build (src/input.css → styles.css); the dialog is lib/panel.js with lib/panel.css -->
 <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="lib/narrator.css">
+<link rel="stylesheet" href="lib/panel.css">
+<link rel="stylesheet" href="lib/narrator.css">
+<style>
+  /* the reference page is one panel: the chat on the left, its sections on the right */
+  #dialog { --fw-accent: #34d399; --fw-side: #fbbf24; font-size: 14px; min-height: 36rem; }
+  #dialog .fw-ctl { background: #0f172a; }
+  #dialog .fw-log { padding-right: 4px; }
+  #dialog .fw-input .fw-text { background: #020617; color: inherit; border: 1px solid #334155; border-radius: 6px; padding: 5px 8px; }
+  #dialog .fw-mic { background: #0f172a; color: inherit; border: 1px solid #475569; border-radius: 6px; padding: 4px 10px; }
+  #dialog .fw-sec { border-color: #1e293b; }
+  @media (min-width: 900px) {
+    #dialog.fw-panel { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); grid-template-rows: auto minmax(0, 1fr); gap: 0 16px; }
+    #dialog .fw-bar { grid-column: 1 / -1; }
+    #dialog .fw-sections { padding-top: 0; }
+  }
+</style>
 </head>
 <body class="h-full bg-slate-950 text-slate-200 font-sans antialiased">
-<div class="mx-auto max-w-7xl p-3 md:p-4 flex flex-col gap-3 md:h-full">
+<div class="mx-auto max-w-7xl p-3 md:p-4 flex flex-col gap-3 h-full">
 
-  <!-- header: floor · attention · reply mode · barge-in policy · mic -->
   <header class="flex flex-wrap items-center gap-3 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
-    <div class="flex items-center gap-2">
-      <span class="text-sm font-bold tracking-wide text-cyan-300">fsttm-web</span>
-      <span id="mode" class="text-[11px] font-mono text-slate-500">dialog</span>
-      <span id="status" class="text-[11px] font-mono text-slate-500">loading…</span>
-    </div>
-    <div class="flex items-center gap-1.5 text-[11px] font-mono" title="the floor state (fsttm.json)">
-      <span class="text-slate-500">floor</span><b id="floor" class="pill">—</b>
-    </div>
-    <label class="flex items-center gap-2 text-[11px] font-mono cursor-pointer select-none" title="attention{AWAKE|ASLEEP}: the UI switch (the harness's ForceAttention)">
-      <input id="attnSwitch" type="checkbox" class="accent-emerald-400 w-4 h-4">
-      <span id="attn" class="text-slate-400">—</span>
-    </label>
+    <span class="text-sm font-bold tracking-wide text-cyan-300">fsttm-web</span>
+    <span id="mode" class="text-[11px] font-mono text-slate-500">dialog</span>
+    <span id="status" class="text-[11px] font-mono text-slate-500">loading…</span>
     <span id="narrator" title="select text, then F8"></span>
-    <div class="ml-auto flex flex-wrap items-center gap-2">
-      <button id="replyBtn" type="button" class="btn" title="long: free conversation, several sentences · short: the intent turn (JSON + one ack)">replies: long</button>
-      <select id="bargeSel" class="btn bg-slate-900" title="barge-in policy (README: Design)">
-        <option value="words">barge-in: words</option>
-        <option value="energy">barge-in: energy</option>
-        <option value="none">barge-in: none</option>
-      </select>
-      <button id="micBtn" type="button" class="btn" title="start the dialog: SpeechRecognition + speechSynthesis; wakes her">mic off</button>
-      <span id="micDot" class="inline-block w-2.5 h-2.5 rounded-full bg-slate-700" title="recognizer running"></span>
-    </div>
+    <button id="sayLong" type="button" class="btn ml-auto" title="a fixed long announcement to talk over">say something long</button>
   </header>
 
-  <main class="grid grid-cols-1 md:grid-cols-5 gap-3 md:flex-1 md:min-h-0">
-
-    <!-- left: chat over turns, as the TUI's chat : intents = 2 : 1 -->
-    <div class="md:col-span-3 flex flex-col gap-3 md:min-h-0">
-      <section class="panel md:flex-[2] min-h-[22rem] md:min-h-0">
-        <div class="panel-head"><span class="text-cyan-300">chat</span>
-          <span class="panel-note">you = your words (her echo dropped: events) · agent = what was spoken · amber = cuts and stops</span></div>
-        <div id="chat" class="scroll space-y-1.5" aria-live="polite"></div>
-        <form id="chatForm" class="mt-2 flex gap-2">
-          <input id="chatInput" type="text" autocomplete="off" autofocus placeholder="type to her (spoken back; no mic needed)"
-                 class="flex-1 bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500">
-          <button class="px-3 py-1.5 rounded-md text-sm bg-cyan-600 hover:bg-cyan-500 text-white">send</button>
-        </form>
-      </section>
-      <section class="panel md:flex-1 min-h-[14rem] md:min-h-0">
-        <div class="panel-head"><span class="text-fuchsia-300">turns · timing</span>
-          <span class="panel-note">final → first token · reply · dwell FREEu → speech · how it ended</span></div>
-        <div class="scroll">
-          <table class="w-full text-[11px] font-mono">
-            <thead class="text-slate-500 text-left sticky top-0 bg-slate-900"><tr>
-              <th class="cell">#</th><th class="cell">mode</th><th class="cell">heard</th><th class="cell text-right">1st tok</th>
-              <th class="cell text-right">reply</th><th class="cell text-right">dwell</th><th class="cell">end</th></tr></thead>
-            <tbody id="turns"></tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-
-    <!-- right: the floor machine, the numbers, the event log (the TUI's State · Perf) -->
-    <div class="md:col-span-2 flex flex-col gap-3 md:min-h-0">
-      <section class="panel shrink-0">
-        <div class="panel-head"><span class="text-sky-300">floor · FSTTM</span>
-          <span id="dwell" class="panel-note">—</span></div>
-        <div id="fsm"></div>
-        <div id="trail" class="text-[10px] font-mono text-slate-500 text-center mb-0.5" title="the last floor states and how long each held"></div>
-        <div id="costs" class="text-[10px] font-mono text-slate-500 text-center" title="§3.2 expected costs of the system's actions now (observational)"></div>
-      </section>
-      <section class="panel shrink-0">
-        <div class="panel-head"><span class="text-emerald-300">state · perf</span>
-          <button id="saveBench" type="button" class="link">save bench (JSONL)</button></div>
-        <dl id="stats" class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] font-mono"></dl>
-      </section>
-      <section class="panel md:flex-1 min-h-[14rem] md:min-h-0">
-        <div class="panel-head"><span class="text-slate-400">events</span>
-          <span class="flex gap-3">
-            <button id="sayLong" type="button" class="link" title="a fixed long announcement to talk over">say something long</button>
-            <button id="clearBtn" type="button" class="link">clear</button></span></div>
-        <div id="events" class="scroll break-all font-mono text-[10px] leading-tight text-slate-400 space-y-px"></div>
-      </section>
-    </div>
-
-  </main>
+  <main id="dialog" class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 flex-1"></main>
 
   <p class="text-[11px] text-slate-500 shrink-0">
     <b>mic</b> starts the dialog and wakes her (<code>?asleep</code>: wake word first). Talk over her to barge in; "stop" cuts at once.
-    <code>?reply=short</code> starts in the intent mode; <code>?wake=a,b</code> sets the wake words. <a class="underline" href="?selftest">?selftest</a> runs the event table in this Chrome.</p>
+    The strip sets the barge-in policy, attention and the replies; the sections open the floor, the numbers, the turns and the events (saved as JSONL).
+    <code>?reply=short</code> starts in the intent mode; <code>?wake=a,b</code> sets the wake words; <code>?backend=stub</code> needs no server.
+    <a class="underline" href="?selftest">?selftest</a> runs the event table in this Chrome.</p>
 </div>
 <!-- the framework's modules by their package names (package.json "exports"); run.sh serves lib/ as lib/ -->
 <script type="importmap">
 { "imports": { "fsttm-web/fsttm": "./lib/fsttm.js", "fsttm-web/attention": "./lib/attention.js",
                "fsttm-web/dialog": "./lib/dialog.js", "fsttm-web/tts": "./lib/tts.js",
                "fsttm-web/ws": "./lib/ws.js", "fsttm-web/panel": "./lib/panel.js",
-               "fsttm-web/narrator": "./lib/narrator.js" } }
+               "fsttm-web/narrator": "./lib/narrator.js", "fsttm-web/bench": "./lib/bench.js",
+               "fsttm-web/fsmview": "./lib/fsmview.js" } }
 </script>
 <script type="module" src="app.js"></script>
 </body>

@@ -41,6 +41,7 @@
   if (!backend) panel.note('no backend on /ws: python examples/serve.py');
   window.say = text => panel.say(text);
   window.panel = panel;
+  document.body.dataset.ready = '1';
 </script>
 </body>
 </html>

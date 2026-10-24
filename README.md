@@ -20,7 +20,9 @@ lib/   fsttm.js fsttm.json   the floor machine and its table (the machine as dat
        dialog.js             browser signals → floor actions: barge-in, echo rejection, the heard-text cut, resume
        tts.js                speechSynthesis with the text actually heard
        ws.js                 the backend adapter over the wire (WsBackend, connect)
-       panel.js panel.css    the dialog as a widget panel: the one input and the intent chat
+       panel.js panel.css    the dialog as a widget panel: the one input, the intent chat, the strip, the sections
+       fsmview.js            the floor machine drawn (the panel's floor section)
+       bench.js              every dialog event, timed, and the barge-in numbers (the panel's state and events)
        narrator.js (+css)    the page's selected text read aloud on one key, beside the dialog (below)
        fixtures/             the floor machine's and attention's cases as data (canonical)
 ```
@@ -32,6 +34,8 @@ import { Dialog, attachRecognizer } from 'fsttm-web/dialog';
 import { BrowserTTS, splitSentences } from 'fsttm-web/tts';
 import { WsBackend, connect } from 'fsttm-web/ws';         // the wire's adapter (below)
 import { Panel, PanelCore } from 'fsttm-web/panel';        // the panel (below); lib/panel.css
+import { Bench } from 'fsttm-web/bench';                  // the events and their numbers
+import { FsmView } from 'fsttm-web/fsmview';              // the floor diagram
 import { Narrator, attachSelection, attachKey, narratorView } from 'fsttm-web/narrator';   // lib/narrator.css
 ```
 
@@ -80,9 +84,30 @@ and the backend's words, tagged spoken or cut. The panel fills an element the pa
 it and takes the page's colours (`lib/panel.css`: currentColor, `--fw-accent`, `--fw-side`).
 
 ```js
-const panel = new Panel(document.getElementById('dock'), { backend: await connect(url), table });
+const panel = new Panel(document.getElementById('dock'), { backend: await connect(url), table,
+  sections: ['floor', 'state', 'turns', 'events'],          // the insides a page shows (none by default)
+  modes: [{ value: 'talk', label: 'long' }, 'intent'] });    // the backend's reply modes, if it has some
 window.say = text => panel.say(text);
 ```
+
+- **The strip.** The bar holds the dialog's controls: the **barge-in** policy (words,
+  energy, none: `setBargeIn(p)`, live on the dialog), **attention** awake / asleep (shown
+  where there is a wake word: `setAttention(awake)`), and the **reply mode** (shown when
+  the backend has `modes`: `setReply(v)`; `turn(id, text, mode)` gets it). The mic and the
+  voice switch sit by the text line. `controls: false` hides the strip.
+- **The sections**, each a `<details>`, closed until opened; the open ones are kept per
+  page (`storeKey`, the path by default):
+  - **floor**: the floor machine (`fsmview.js`), the dwell, the last states, §3.2's costs;
+  - **state**: floor, attention, channel, mode, reply, barge-in, recognizer (the
+    echo-cancelled track or the raw mic, on-device or cloud), voice; then the numbers the
+    bench computes (`bench.js`): barge-ins, onset→cut, false cuts, echo drops, first token,
+    reply time, the FREEu dwell, the seconds spoken;
+  - **turns**: each turn's mode, words, first token, reply, dwell and how it ended;
+  - **events**: the dialog log, capped, with **save (JSONL)** (every event, timed) and **clear**.
+- `meta: true` shows each row's small print: the input's source and the floor, a
+  narration's kind and form. `narrate(frame)` says which narrations are voiced (default:
+  all but form R). `onDevice: true` asks for on-device recognition; `micWakes` (default)
+  has the mic button wake her and its off put her to sleep, where there is a wake word.
 
 - **One entry.** The text line, a recognized utterance and `panel.say(text)` all take
   one path: the floor's `final()`, the echo and attention rules, then a turn on the
@@ -96,8 +121,10 @@ window.say = text => panel.say(text);
 - **The page's own.** `setMode(text)` shows the page's word for the input's mode.
   `onFrame` gets every frame the panel doesn't know (narration it voices itself), and
   `log` every dialog event (a stop phrase, `keyword_stop`, never reaches a turn).
-- `PanelCore` is the logic without the DOM (`test/panel.mjs` drives it on a fake backend).
-  `web/panel.html` is the panel in a dock over `examples/serve.py`'s stub backend.
+- `PanelCore` is the logic without the DOM (`test/panel.mjs` drives it on a fake backend);
+  `core.bench` keeps the events, `core.timings` the turns.
+  `web/panel.html` is the panel in a dock over `examples/serve.py`'s stub backend; the
+  reference page (below) is the panel with all its sections.
 
 ## The narrator
 
@@ -201,18 +228,23 @@ assistant with a lamp (`prompt/example-prompt.txt`, `grammar/example.gbnf`:
 LIGHT_ON, LIGHT_OFF, TIME, CHITCHAT, UNKNOWN). An application gives its own
 prompt and grammar to `loadAssets`.
 
-The panels: the chat over the turn timings; the floor diagram (the current
-state green, the one just left blue), the numbers and the event log.
+The page is one panel (`lib/panel.js`, above) with all four sections, the chat on
+the left and the sections on the right; the strip sets barge-in, attention and the
+replies. `web/app.js` only chooses the backend, sets the narrator (F8) and runs
+`?selftest`.
 
 URL options:
 - `?asleep`: start asleep, so the wake word comes first.
 - `?wake=a,b`: the wake words.
 - `?reply=short`: start in the intent mode.
-- `?backend=llama|ws`: force a backend.
-- `?narrate=all|none`: voice every narration, or none.
+- `?barge_in=words|energy|none`: the barge-in policy at the start.
+- `?voice=0`: the voice off (rows only).
+- `?raw_mic`: the recognizer on the raw mic (her voice dropped by text), not the echo-cancelled track.
+- `?backend=llama|ws|stub`: force a backend; `stub` is in the page (`web/backend/stub.js`), no server.
+- `?narrate=all|none`, `?narrate_rate=1.2`, `?narrate_key=F9`: the narrations voiced, the narrator's rate and key.
 - `?selftest`: the event table in this Chrome.
 
-**save bench (JSONL)** exports every dialog event, timed.
+The events section's **save (JSONL)** exports every dialog event, timed.
 
 Styles are Tailwind 3.4.17 with no bundler: `npm run build` turns
 `web/src/input.css` into `web/styles.css`, which is committed.
@@ -224,6 +256,7 @@ Ctrl+Shift+R.
 ```
 npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table) + test/echo.mjs (the echo measure on re-spelled echoes, and a narration backlog) + test/panel.mjs (the panel's logic) + test/ws.mjs (the wire's adapter) + test/narrator.mjs (the narrator on a stub synth beside the dialog's TTS)
 pytest test/test_python.py       # the package: one source, the stub backend, the mount
+node test/page_e2e.mjs           # the browser suite (node >= 22, Chrome): the reference page as one panel on ?backend=stub
 ```
 
 ## License

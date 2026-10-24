@@ -6,7 +6,7 @@
 import { FSTTM } from 'fsttm-web/fsttm';
 import { Attention } from 'fsttm-web/attention';
 import { Dialog } from 'fsttm-web/dialog';
-import { Bench } from './bench.js';
+import { Bench } from 'fsttm-web/bench';
 
 export class FakeTTS {
   constructor() { this.cur = null; this.spoken = []; }

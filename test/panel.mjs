@@ -2,7 +2,8 @@
 // the event table's fake TTS: one entry for every input, the intent chat's rows, the
 // narration, a cut back to the backend, the two channels and the quasimode.
 import { readFile } from 'node:fs/promises';
-import { PanelCore, holdable } from '../lib/panel.js';
+import { PanelCore, holdable, BARGE_IN, SECTIONS } from '../lib/panel.js';
+import { Attention } from '../lib/attention.js';
 import { FakeTTS } from '../web/eventtable.js';
 
 const table = JSON.parse(await readFile(new URL('../lib/fsttm.json', import.meta.url), 'utf8'));
@@ -172,6 +173,66 @@ const rows = p => p.rows.map(r => `${r.who}${r.via ? ':' + r.via : ''}${r.channe
   ok(!holdable(E('DIV', { role: 'button' })) && !holdable(E('SPAN', { role: 'tab' })) && !holdable(E('LI', { role: 'option' })),
     'not holdable: role button, tab, option');
   ok(!holdable(E('TEXTAREA')) && !holdable(E('DIV', {}, true)) && holdable(E('A')), 'not holdable: a text field, an editable; an anchor without href is');
+}
+
+// the strip: barge-in live on the dialog, attention where there is a wake word, the reply mode the backend gets
+{
+  const { p, backend, tts } = make({ modes: [{ value: 'talk', label: 'long' }, { value: 'intent', label: 'short' }],
+    attention: new Attention({ wakeWords: ['computer'], startAsleep: true }) });
+  ok(BARGE_IN.join() === 'words,energy,none' && p.state().bargeIn === 'words', 'barge-in: words by default');
+  ok(p.setBargeIn('energy') && p.dialog.bargeIn === 'energy' && p.state().bargeIn === 'energy', 'setBargeIn: live on the dialog and in the state');
+  ok(!p.setBargeIn('loud') && p.dialog.bargeIn === 'energy', 'an unknown policy changes nothing');
+  ok(p.bench.events.some(e => e.kind === 'policy' && e.bargeIn === 'energy'), 'the policy change is an event');
+  ok(p.state().wakeable && p.state().attention === 'ASLEEP', 'attention: asleep at the start (a wake word)');
+  p.setAttention(true);
+  ok(p.state().attention === 'AWAKE' && p.bench.events.some(e => e.kind === 'attention' && e.forced === 'switch'), 'setAttention wakes her, an event');
+  ok(p.state().reply === 'talk' && p.state().modes.length === 2, 'the reply mode: the first of modes');
+  await p.say('go to the panel', { via: 'text' });
+  ok(backend.turns[0].mode === 'talk', 'a turn gets the reply mode');
+  tts.finish();
+  ok(p.setReply('intent') && !p.setReply('poetry') && p.state().reply === 'intent', 'setReply: one of modes only');
+  await p.say('go to the note');
+  ok(backend.turns[1].mode === 'intent', 'the next turn the new mode');
+  tts.finish();
+  ok(p.timings.length === 2 && p.timings[0].mode === 'long' && p.timings[0].end === 'spoken' && p.timings[1].mode === 'short', `the turns' timings, by mode label: ${JSON.stringify(p.timings)}`);
+  ok(p.bench.events.some(e => e.kind === 'typed') && p.bench.events.filter(e => e.kind === 'llm').length === 2, 'the bench keeps the events (typed, llm)');
+  p.setAttention(false);
+  await p.say('hello there', { via: 'voice' });
+  ok(p.rows.at(-1).who === 'note' && /ignored: asleep — say "computer/.test(p.rows.at(-1).text), 'asleep: a voice line is ignored, said in a note');
+  await p.say('hello there', { via: 'text' });
+  ok(p.state().attention === 'AWAKE' && backend.turns.at(-1).text === 'hello there', 'typing wakes her: a typed line is a turn');
+  tts.finish();
+}
+// no modes, no wake word: the strip's reply and attention have nothing to show
+{
+  const { p, backend } = make();
+  ok(p.state().modes === null && p.state().reply === 'intent' && !p.state().wakeable && p.state().attention === 'AWAKE', 'no modes: intent; no wake word: always awake');
+  await p.say('go to the panel');
+  ok(backend.turns[0].mode === 'intent', "a backend without modes gets 'intent'");
+  ok(p.state().recognizer === 'off', 'the recognizer off');
+  p.event('recognition', { api: true, processLocally: true });
+  p.listen({ start() {}, stop() {} }, { stream: { getAudioTracks: () => [{ label: 'x' }], getTracks: () => [] } });
+  ok(p.state().recognizer === 'echo-cancelled track · on-device', `the recognizer named: ${p.state().recognizer}`);
+  p.unlisten();
+}
+// the narration rule, the stop note, the echo before a final, the application's frames as events
+{
+  const { p, tts, frames } = make({ narrate: f => f.kind === 'announce' });
+  p.backend.onFrame({ ev: 'narration', id: 'a1', kind: 'quiescence', form: 'N', sentence: 'All quiet.' });
+  ok(tts.spoken.length === 0 && /shown, not voiced/.test(p.rows.at(-1).meta), 'narrate(): a kind it does not voice is shown, not voiced');
+  p.backend.onFrame({ ev: 'narration', id: 'a2', kind: 'announce', form: 'N', sentence: 'The door opened.' });
+  ok(tts.spoken.at(-1) === 'The door opened.', 'narrate(): a kind it voices is spoken');
+  tts.finish();
+  p.backend.onFrame({ ev: 'runtime', kind: 'tick', n: 3 });
+  ok(frames.at(-1).ev === 'runtime' && p.bench.events.some(e => e.kind === 'runtime' && e.of === 'tick' && e.n === 3), "the application's frame: the page's, and an event");
+  p.dialog.say(['Mountains are tall and very old, older than the rivers.'], 'announce'); tts.finish();   // her words, heard back on the raw mic
+  await p.say('mountains are tall and very old what about the moon', { via: 'voice' });
+  const moon = p.rows.find(r => r.who === 'person' && r.text === 'what about the moon');
+  ok(moon?.tags[0] === 'her echo before it dropped: "mountains are tall and very old"', `the echo before a final tags its row: ${JSON.stringify(moon)}`);
+  tts.finish();
+  await p.say('stop');
+  ok(p.rows.at(-1).who === 'note' && p.rows.at(-1).text === 'stop: "stop"', 'a stop phrase: a note');
+  ok(Object.keys(SECTIONS).join() === 'floor,state,turns,events', 'the sections: floor, state, turns, events');
 }
 
 await tick();

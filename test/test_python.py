@@ -18,7 +18,8 @@ def test_one_source():
     assert fsttm_web.asset("dog.gbnf") is None                    # 0.4.0: the reference page's assets are the example's
     assert fsttm_web.routes(page=False) == [("/lib/", fsttm_web.LIB)]
     assert set(fsttm_web.IMPORT_MAP["imports"]) == {"fsttm-web/fsttm", "fsttm-web/attention", "fsttm-web/dialog", "fsttm-web/tts",
-                                                     "fsttm-web/ws", "fsttm-web/panel", "fsttm-web/narrator"}
+                                                     "fsttm-web/ws", "fsttm-web/panel", "fsttm-web/narrator",
+                                                     "fsttm-web/bench", "fsttm-web/fsmview"}
     assert not hasattr(fsttm_web, "SHELL") and not (fsttm_web.LIB / "shell.css").exists()   # 0.3.0: no consoles' shell
 
 
