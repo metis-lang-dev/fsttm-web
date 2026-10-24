@@ -67,6 +67,24 @@ try {
   const st = JSON.parse(await ev(`document.body.dataset.selftest`));
   c.ok(st.rows.length > 0 && st.rows.every(r => r.pass), `?selftest: the event table ${st.rows.filter(r => r.pass).length}/${st.rows.length}`, st.rows.filter(r => !r.pass));
 
+  // a dock of fixed height (329 px, the world page's TALK) with all the sections: when the log fills up, it gives
+  // way, every summary stays inside the dock
+  await ev(`(async () => { const { Panel } = await import('/lib/panel.js'); const { StubBackend } = await import('/backend/stub.js');
+    const box = document.createElement('div'); box.id = 'dock329'; box.style.cssText = 'height:329px;width:360px;position:fixed;left:0;top:0;background:#000';
+    document.body.append(box);
+    window.dock = new Panel(box, { backend: new StubBackend(), table: await (await fetch('lib/fsttm.json')).json(), voice: false,
+      sections: ['floor', 'state', 'turns', 'events'], storeKey: 'dock329', flipKey: null, holdKey: null });
+    for (let i = 0; i < 30; i++) window.dock.note('a row to fill the log ' + i); })()`);
+  await sleep(200);
+  const fit = await ev(`(() => { const p = document.getElementById('dock329').getBoundingClientRect();
+    return [...document.querySelectorAll('#dock329 details.fw-sec > summary')].map(s => { const r = s.getBoundingClientRect(); return r.top >= p.top && r.bottom <= p.bottom + 0.5 && r.height > 0; }); })()`);
+  c.ok(fit.length === 4 && fit.every(Boolean), 'a 329 px dock with a full log: every summary inside it', fit);
+  c.ok(await ev(`(() => { const l = document.querySelector('#dock329 .fw-log'); return l.scrollHeight > l.clientHeight; })()`), 'the log gives way: it scrolls');
+  await ev(`document.getElementById('dock329').remove()`);
+
+  // the reference page's sections column keeps the whole height (no dock cap)
+  c.ok(await ev(`(() => { const s = document.querySelector('#dialog .fw-sections'), p = document.querySelector('#dialog'); return s.getBoundingClientRect().height > p.getBoundingClientRect().height * 0.6; })()`), "the page's sections column: more than half the panel");
+
   // the dock example: the strip, no sections, no backend said in a note
   await page.goto('panel.html');
   c.ok(await ev(`!!document.querySelector('#dock .fw-controls') && !document.querySelector('#dock .fw-sections')`), 'panel.html: the strip, no sections');

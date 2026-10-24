@@ -32,7 +32,9 @@
 .fw-panel .fw-attn[aria-pressed="true"] { color: #fff; background: var(--fw-accent-c); border-color: var(--fw-accent-c); }
 .fw-panel .fw-main { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 /* the sections: floor, state, turns, events — closed until opened */
-.fw-panel .fw-sections { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; min-height: 0; overflow: auto; }
+/* in a dock of fixed height the log gives way (it scrolls), not the sections: their summaries keep their
+   height, open sections scroll inside half the panel (opus, dialog-panel step 3) */
+.fw-panel .fw-sections { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; flex: 0 0 auto; max-height: 50%; min-height: 0; overflow: auto; }
 .fw-panel .fw-sec { border-top: 1px solid color-mix(in srgb, currentColor 25%, transparent); padding-top: 2px; }
 .fw-panel .fw-sec > summary { cursor: pointer; font-size: 12px; font-weight: 600; padding: 2px 0; }
 .fw-panel .fw-body { font: 11px/1.35 ui-monospace, monospace; padding: 4px 0; }
