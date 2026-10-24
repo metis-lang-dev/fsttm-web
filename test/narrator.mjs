@@ -56,16 +56,48 @@ function setup() {
   ok(said.join('|') === `${S[0]}|${S[1]}` && tts.narrating === null, 'a cut sentence is handed over too, and nothing is narrating');
 }
 
-// 2. pause and resume: the sentence is cut and read again from its start; stop clears
+// 2. pause and resume: cut at the word being read, read on from that word; stop clears
 {
   const { synth, n } = setup();
   n.select(TEXT); n.press(); synth.end();                  // reading sentence 2
   n.press();
   ok(n.state === 'paused' && synth.cancels === 1 && synth.q.length === 0 && n.i === 1, 'press while reading pauses: cut, cursor kept');
   n.press();
-  ok(n.state === 'reading' && synth.q[0]?.text === S[1], 'press while paused resumes the same sentence from its start');
+  ok(n.state === 'reading' && synth.q[0]?.text === S[1], 'paused at once: the sentence from its start');
+  synth.q[0].onboundary({ charIndex: 10 });                // "is" (the voice names its words)
+  n.press();
+  ok(n.state === 'paused' && n.from === 10, 'pause at a word boundary: the word kept', n.from);
+  n.press();
+  ok(synth.q[0]?.text === 'is dry, water it today.', 'resume reads on from that word, not from the top', synth.q[0]?.text);
+  synth.q[0].onboundary({ charIndex: 8 });                 // "water", in the resumed utterance
+  n.press(); n.press();
+  ok(synth.q[0]?.text === 'water it today.', 'a second pause in the resumed part: on from its word', synth.q[0]?.text);
+  synth.end();
+  ok(n.i === 2 && n.from === 0 && synth.q[0]?.text === S[2], 'its end: the next sentence whole');
   n.stop();
-  ok(n.state === 'stopped' && n.i === 0 && synth.q.length === 0, 'stop is silent, cursor at the top');
+  ok(n.state === 'stopped' && n.i === 0 && n.from === 0 && synth.q.length === 0, 'stop is silent, cursor at the top');
+}
+// 2b. no word boundaries from the voice (Chrome on Linux): where it got to by the time spoken, back to a word start
+{
+  const { synth, n } = setup();
+  n.select(TEXT); n.press(); synth.end();
+  synth.q[0].startedAt -= 1000;                            // 1 s of "The plant is dry, water it today." at ~18 chars/s
+  n.press(); n.press();
+  ok(synth.q[0]?.text === 'water it today.', 'by time: on from the word reached', synth.q[0]?.text);
+  synth.q[0].startedAt -= 60000;                           // long past its end
+  n.press();
+  ok(n.i === 2 && n.from === 0, 'by time past the end: the next sentence', [n.i, n.from]);
+}
+// 2c. a yield to the dialog keeps the word too
+{
+  const { synth, tts, n } = setup();
+  n.select(TEXT); n.press(); synth.end();
+  synth.q[0].onboundary({ charIndex: 10 });
+  tts.speak(['A reply.']);
+  ok(n.state === 'yielding' && n.from === 10, 'the dialog speaks: held at the word', [n.state, n.from]);
+  synth.end();
+  for (let i = 0; i < 3; i++) await Promise.resolve();
+  ok(n.state === 'reading' && synth.q[0]?.text === 'is dry, water it today.', 'after the reply: on from that word', synth.q[0]?.text);
 }
 
 // 3. a new selection while reading resets; a press reads the new text
