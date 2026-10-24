@@ -44,6 +44,18 @@ function setup() {
   ok(states[0] === 'stopped:0' && states.includes('reading:0'), 'onchange saw the states');
 }
 
+// 1b. the dialog's echo window: tts.narrating while a sentence is read, tts.onnarrated(text) at its end or cut
+{
+  const { synth, tts, n } = setup();
+  const said = []; tts.onnarrated = t => said.push(t);
+  n.select(TEXT); n.press();
+  ok(tts.narrating === S[0], 'tts.narrating is the sentence being read');
+  synth.end();
+  ok(said.join('|') === S[0] && tts.narrating === S[1], 'its end hands it to onnarrated; the next is narrating');
+  n.stop();
+  ok(said.join('|') === `${S[0]}|${S[1]}` && tts.narrating === null, 'a cut sentence is handed over too, and nothing is narrating');
+}
+
 // 2. pause and resume: the sentence is cut and read again from its start; stop clears
 {
   const { synth, n } = setup();

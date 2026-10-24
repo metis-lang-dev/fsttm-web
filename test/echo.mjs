@@ -147,6 +147,13 @@ async function backlog(c, lines = LINES) {
     check(`"${t}" begun 0.4 s after her (the recognizer's lag): measured on text, her words stripped`, o.calls.join() !== t, o.calls);
   }
 }
+{ // the narrator's reading (F8) is echo: tts.narrating while read, the ring after (tts.onnarrated)
+  const c = make(); c.tts.narrating = 'The plant is dry, water it today.';
+  await c.d.final('the plant is dry water it to day');
+  c.tts.onnarrated(c.tts.narrating); c.tts.narrating = null; c.adv(3000);
+  await c.d.final('the plant is dry');
+  check('the narrator\'s sentence heard back, while read and 3 s after: echo', c.calls.length === 0 && c.events.filter(e => e.kind === 'echo').length === 2, c.calls);
+}
 { // "stop" at any time: over a line, over the card line, right after the backlog
   for (const [name, sp] of [['a line', ['I go to countertop 3.']], ['the card line', CARD]]) {
     const c = make(); c.d.say(sp, 'narration'); await tick(); c.adv(400);
