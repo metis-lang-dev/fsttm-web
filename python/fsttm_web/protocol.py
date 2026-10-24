@@ -47,7 +47,7 @@ Page → host
                                         host|say|backend|panel, tags spoken, cut · heard …;
                                         host_id the id the host gave its own line
     event  {kind, t, …}                 every dialog event (the panel's events section)
-    state  {floor, attention, channel, mode, reply, barge_in, recognizer, voice, listening}
+    state  {floor, attention, mode, reply, barge_in, recognizer, voice, listening}
                                         on every change
 
 An application extends the wire with frames of its own, either way: any other

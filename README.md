@@ -99,7 +99,7 @@ window.say = text => panel.say(text);
 - **The sections**, each a `<details>`, closed until opened; the open ones are kept per
   page (`storeKey`, the path by default):
   - **floor**: the floor machine (`fsmview.js`), the dwell, the last states, §3.2's costs;
-  - **state**: floor, attention, channel, mode, reply, barge-in, recognizer (the
+  - **state**: floor, attention, mode, reply, barge-in, recognizer (the
     echo-cancelled track or the raw mic, on-device or cloud), voice; then the numbers the
     bench computes (`bench.js`): barge-ins, onset→cut, false cuts, echo drops, first token,
     reply time, the FREEu dwell, the seconds spoken;
@@ -127,11 +127,10 @@ window.say = text => panel.say(text);
   one path: the floor's `final()`, the echo and attention rules, then a turn on the
   backend. So a script, a test and a backend's text socket type into the same line as
   a person. A row records each input's source: typed, heard or said.
-- **Two channels.** The backend is the main one. A page with a second consumer of the
-  voice gives `side: { label, send(text, {id}) → words }`. `flip()` moves the input to it
-  (the `flipKey`, Ctrl+Space by default). `hold()`/`release()` is the quasimode: the side
-  channel only while the `holdKey` is held (Space by default, never while the focus is in
-  a text field). `onChannel(channel, how)` tells the page.
+- **One channel**: the backend. One voice paradigm, the dialog with the agent and the game (the
+  user, 2026-10-24: voice-nav-removal) — the second channel (`side`, `flip()`, the push-to-talk
+  `hold()`/`release()`, `flipKey`/`holdKey`, `onChannel`) served only the voice navigation and is
+  gone; the page's own controls stay keyboard and mouse.
 - **The page's own.** `setMode(text)` shows the page's word for the input's mode.
   `onFrame` gets every frame the panel doesn't know (narration it voices itself), and
   `log` every dialog event (a stop phrase, `keyword_stop`, never reaches a turn).
@@ -210,7 +209,7 @@ reads it as the person sees it, on the same socket:
 | host → page | `ctl{barge_in?, voice?, attention?, reply?, mic?}` | the strip: words / energy / none, on / off, awake / asleep, one of the page's modes (`mode` is the same), mic on / off |
 | page → host | `chat{who, text, row, id, via, tags, kind?, host_id?}` | every row the panel shows, again on each new tag: who `user` / `system` / `intent` / `note`, via `typed` / `heard` / `host` / `say` / `backend` / `panel`, tags `spoken`, `cut · heard "…"` …; `host_id` the id the host gave its own line |
 | page → host | `event{kind, t, …}` | every dialog event (an application's own frames never) |
-| page → host | `state{floor, attention, channel, mode, reply, barge_in, recognizer, voice, listening}` | on every change |
+| page → host | `state{floor, attention, mode, reply, barge_in, recognizer, voice, listening}` | on every change |
 
 The page sends back only when it opts in: `new Panel(el, { host: true })` (or `{rows,
 events, state}`); the reference page with `?host`. The host's side is `fsttm_web.chat`:

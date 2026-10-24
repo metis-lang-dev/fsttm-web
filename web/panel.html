@@ -24,8 +24,7 @@
 <body>
 <main>
   <section><h1>The dialog panel</h1>
-    <p>Type in the panel's line, press <kbd>mic</kbd>, or call <code>say("…")</code> in the console: one entry.
-    <kbd>Ctrl</kbd>+<kbd>Space</kbd> flips to the side channel (a stub chat here); hold <kbd>Space</kbd> outside a text field to talk to it while held.</p>
+    <p>Type in the panel's line, press <kbd>mic</kbd>, or call <code>say("…")</code> in the console: one entry.</p>
   </section>
   <section id="dock"></section>
 </main>
@@ -36,7 +35,6 @@
   const table = await (await fetch('lib/fsttm.json')).json();
   const panel = new Panel(document.getElementById('dock'), {
     backend, table, title: 'dialog',
-    side: { label: 'the chat', send: async text => `the chat got: ${text}` },
   });
   if (!backend) panel.note('no backend on /ws: python examples/serve.py');
   window.say = text => panel.say(text);

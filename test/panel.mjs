@@ -1,8 +1,8 @@
 // node test/panel.mjs — the panel's logic (lib/panel.js PanelCore) on a fake backend and
 // the event table's fake TTS: one entry for every input, the intent chat's rows, the
-// narration, a cut back to the backend, the two channels and the quasimode.
+// narration, a cut back to the backend, the one channel.
 import { readFile } from 'node:fs/promises';
-import { PanelCore, holdable, BARGE_IN, SECTIONS, hostURL, hostSocket } from '../lib/panel.js';
+import { PanelCore, BARGE_IN, SECTIONS, hostURL, hostSocket } from '../lib/panel.js';
 import { Attention } from '../lib/attention.js';
 import { FakeTTS } from '../web/eventtable.js';
 
@@ -23,13 +23,12 @@ class FakeBackend {
 }
 
 function make(opts = {}) {
-  const backend = new FakeBackend(), tts = new FakeTTS(), states = [], channels = [], frames = [], events = [];
-  const side = opts.side === false ? null : { label: 'the chat', sent: [], send: async t => { side.sent.push(t); return `noted: ${t}`; } };
-  const p = new PanelCore({ backend, table, tts, side, onState: s => states.push(s), onChannel: (c, how) => channels.push([c, how]),
+  const backend = new FakeBackend(), tts = new FakeTTS(), states = [], frames = [], events = [];
+  const p = new PanelCore({ backend, table, tts, onState: s => states.push(s),
     onFrame: f => frames.push(f), log: k => events.push(k), ...opts });
-  return { p, backend, tts, side, states, channels, frames, events };
+  return { p, backend, tts, states, frames, events };
 }
-const rows = p => p.rows.map(r => `${r.who}${r.via ? ':' + r.via : ''}${r.channel === 'side' ? ':side' : ''} ${r.text}`);
+const rows = p => p.rows.map(r => `${r.who}${r.via ? ':' + r.via : ''} ${r.text}`);
 
 // 1. a typed line, a script's say and a recognized utterance: one path, rows by source
 {
@@ -99,38 +98,10 @@ const rows = p => p.rows.map(r => `${r.who}${r.via ? ':' + r.via : ''}${r.channe
   ok(backend.turns.length === 2, 'the barge-in is the next turn');
 }
 
-// 5. the side channel: flip, the side's words, no cut to the backend
+// 7. one channel (voice-nav-removal: no side channel, no flip, no push-to-talk); the mode and the floor in the state
 {
-  const { p, backend, tts, side, channels } = make();
-  ok(p.flip() && p.state().channel === 'side', 'flip: the side channel');
-  await p.say('the lamp should dim before it goes dark', { via: 'text' });
-  ok(backend.turns.length === 0 && side.sent[0] === 'the lamp should dim before it goes dark', 'a side turn goes to side.send, not the backend');
-  ok(JSON.stringify(rows(p)) === JSON.stringify(['person:text:side the lamp should dim before it goes dark', 'agent:side noted: the lamp should dim before it goes dark']),
-    `side rows: ${JSON.stringify(rows(p))}`);
-  tts.progress(3);
-  await p.say('and brighten after');
-  ok(backend.cuts.length === 0, "a side reply's cut is not the backend's");
-  ok(p.flip() && p.state().channel === 'main' && JSON.stringify(channels) === JSON.stringify([['side', 'flip'], ['main', 'flip']]), `flips: ${JSON.stringify(channels)}`);
-}
-
-// 6. the quasimode: the side channel only while held
-{
-  const { p, channels } = make();
-  ok(p.hold() && p.state().channel === 'side' && p.state().held, 'hold: the side channel, held');
-  ok(!p.hold(), 'a second hold is nothing');
-  ok(p.release() && p.state().channel === 'main' && !p.state().held, 'release: back to main');
-  ok(!p.release(), 'a release without a hold is nothing');
-  p.flip();
-  p.hold();
-  p.release();
-  ok(p.state().channel === 'side', 'a hold from the side channel releases back to the side');
-  ok(JSON.stringify(channels) === JSON.stringify([['side', 'held'], ['main', 'flip'], ['side', 'flip']]), `channels: ${JSON.stringify(channels)}`);
-}
-
-// 7. no side channel: flip and hold refuse; the mode and the floor in the state
-{
-  const { p, states } = make({ side: false });
-  ok(!p.flip() && !p.hold() && p.state().channel === 'main', 'no side: flip and hold refuse');
+  const { p, states } = make();
+  ok(!('flip' in p) && !('hold' in p) && !('channel' in p.state()), 'one channel: no flip, no hold, no channel in the state');
   p.setMode('dictation');
   ok(states.at(-1).mode === 'dictation', 'setMode shows the page’s mode');
   await p.say('go to the panel');
@@ -160,19 +131,6 @@ const rows = p => p.rows.map(r => `${r.who}${r.via ? ':' + r.via : ''}${r.channe
   const { p, tts } = make({ maxRows: 5 });
   for (let i = 0; i < 4; i++) { await p.say(`go to w${i}`); tts.finish(); }
   ok(p.rows.length === 5 && p.rows.at(-1).n === 12 && p.turns.size <= 5, `capped: ${p.rows.length} rows, last n ${p.rows.at(-1).n}, ${p.turns.size} turns`);
-}
-
-// 11. a held Space is push-to-talk only where Space means nothing else (review P-1)
-{
-  const E = (tagName, attrs = {}, editable = false) => ({ tagName, isContentEditable: editable,
-    getAttribute: k => attrs[k] ?? null, hasAttribute: k => k in attrs });
-  ok(holdable(null) && holdable(E('BODY')) && holdable(E('DIV')) && holdable(E('UL')) && holdable(E('MAIN', { role: 'region' })),
-    'holdable: the body, a container, a list');
-  ok(!holdable(E('BUTTON')) && !holdable(E('SUMMARY')) && !holdable(E('A', { href: '#' })) && !holdable(E('INPUT', { type: 'checkbox' })),
-    'not holdable: a button, a summary, a link, a checkbox');
-  ok(!holdable(E('DIV', { role: 'button' })) && !holdable(E('SPAN', { role: 'tab' })) && !holdable(E('LI', { role: 'option' })),
-    'not holdable: role button, tab, option');
-  ok(!holdable(E('TEXTAREA')) && !holdable(E('DIV', {}, true)) && holdable(E('A')), 'not holdable: a text field, an editable; an anchor without href is');
 }
 
 // the strip: barge-in live on the dialog, attention where there is a wake word, the reply mode the backend gets

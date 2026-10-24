@@ -119,7 +119,7 @@ try {
     const box = document.createElement('div'); box.id = 'dock329'; box.style.cssText = 'height:329px;width:360px;position:fixed;left:0;top:0;background:#000';
     document.body.append(box);
     window.dock = new Panel(box, { backend: new StubBackend(), table: await (await fetch('lib/fsttm.json')).json(), voice: false,
-      sections: ['floor', 'state', 'turns', 'events'], storeKey: 'dock329', flipKey: null, holdKey: null });
+      sections: ['floor', 'state', 'turns', 'events'], storeKey: 'dock329' });
     for (let i = 0; i < 30; i++) window.dock.note('a row to fill the log ' + i); })()`);
   await sleep(200);
   const fit = await ev(`(() => { const p = document.getElementById('dock329').getBoundingClientRect();
