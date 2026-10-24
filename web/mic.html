@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mic level</title>
+<!-- mic.html — does Chrome's echo canceller take her voice out of the mic? The mic twice, with
+     getUserMedia's echoCancellation and without, each level measured (RMS, dBFS) in three phases:
+     quiet, speechSynthesis speaking (her voice: on Linux it may play outside Chrome's audio, so the
+     canceller has no reference), and a Web Audio sound (played by Chrome: the canceller's own case).
+     A voice-energy barge-in is possible where her voice drops well below the user's on the AEC stream. -->
+<style>
+  :root { --bg: #020617; --panel: #0f172a; --line: #1e293b; --text: #e2e8f0; --dim: #94a3b8; --on: #22d3ee; --off: #f59e0b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  h1 { font-size: 16px; margin: 0; color: var(--on); }
+  p { margin: 6px 0 0; color: var(--dim); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button { background: #1e293b; color: var(--text); border: 1px solid #334155; border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: default; }
+  .meter { display: grid; grid-template-columns: 9em 1fr 6em; gap: 10px; align-items: center; margin-top: 8px; font: 12px ui-monospace, monospace; }
+  .bar { height: 14px; background: #1e293b; border-radius: 7px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; }
+  #mOn i { background: var(--on); } #mOff i { background: var(--off); }
+  table { width: 100%; border-collapse: collapse; font: 12px ui-monospace, monospace; margin-top: 8px; }
+  th, td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  #phase { font: 12px ui-monospace, monospace; color: var(--on); }
+  #verdict { color: var(--text); }
+  code { color: var(--on); }
+</style>
+</head>
+<body>
+<main>
+  <section>
+    <h1>Mic level: does echo cancellation remove her voice?</h1>
+    <p>Speakers on, no headset. Start the mic, then run the phases. Keep quiet during "quiet", "her voice" and "Web Audio"; speak normally during "you".</p>
+    <div class="row" style="margin-top:10px">
+      <button id="start">start the mic</button>
+      <button id="quiet" disabled>quiet (4 s)</button>
+      <button id="tts" disabled>her voice (speechSynthesis)</button>
+      <button id="wa" disabled>Web Audio sound (5 s)</button>
+      <button id="you" disabled>you talk (5 s)</button>
+      <span id="phase"></span>
+    </div>
+    <div class="meter"><span>echoCancellation on</span><div class="bar" id="mOn"><i></i></div><span id="dOn">—</span></div>
+    <div class="meter"><span>off</span><div class="bar" id="mOff"><i></i></div><span id="dOff">—</span></div>
+    <p id="settings"></p>
+  </section>
+  <section>
+    <table>
+      <thead><tr><th>phase</th><th>on: mean dB</th><th>on: peak</th><th>off: mean dB</th><th>off: peak</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="verdict"></p>
+  </section>
+</main>
+<script type="module">
+const $ = id => document.getElementById(id);
+const LINE = 'Here is a long sentence for the meter. The kitchen is quiet, the pot is empty, and nothing has been ordered ' +
+  'for a while, so I will keep talking until the measurement is done.';
+let ctx, meters = [], phase = null;
+const stats = {}; // phase → {on: {sum, n, peak}, off: {...}}
+window.micResults = stats;
+
+const constraints = aec => ({ audio: { echoCancellation: aec, noiseSuppression: aec, autoGainControl: false } });
+async function meter(aec) {
+  const stream = await navigator.mediaDevices.getUserMedia(constraints(aec));
+  const an = ctx.createAnalyser(); an.fftSize = 2048;
+  ctx.createMediaStreamSource(stream).connect(an);
+  return { key: aec ? 'on' : 'off', an, buf: new Float32Array(an.fftSize), settings: stream.getAudioTracks()[0].getSettings() };
+}
+const db = rms => rms > 0 ? 20 * Math.log10(rms) : -120;
+
+function tick() {
+  for (const m of meters) {
+    m.an.getFloatTimeDomainData(m.buf);
+    let s = 0; for (const x of m.buf) s += x * x;
+    const d = db(Math.sqrt(s / m.buf.length));
+    const K = m.key === 'on' ? 'On' : 'Off';
+    $(`d${K}`).textContent = `${d.toFixed(1)} dB`;
+    $(`m${K}`).firstChild.style.width = `${Math.max(0, Math.min(100, (d + 80) * 1.25))}%`;
+    if (phase) {
+      const p = (stats[phase] ??= {})[m.key] ??= { sum: 0, n: 0, peak: -120 };
+      p.sum += d; p.n++; p.peak = Math.max(p.peak, d);
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+function show() {
+  const f = p => p ? `${(p.sum / p.n).toFixed(1)}</td><td>${p.peak.toFixed(1)}` : '—</td><td>—';
+  $('rows').innerHTML = Object.entries(stats).map(([k, v]) => `<tr><td>${k}</td><td>${f(v.on)}</td><td>${f(v.off)}</td></tr>`).join('');
+  const mean = (k, s) => stats[k]?.[s] ? stats[k][s].sum / stats[k][s].n : null;
+  const q = mean('quiet', 'on'), t = mean('her voice', 'on'), w = mean('Web Audio', 'on'), y = mean('you', 'on');
+  const tOff = mean('her voice', 'off'), wOff = mean('Web Audio', 'off');
+  const out = [];
+  if (t != null && tOff != null) out.push(`Her voice: the canceller takes ${(tOff - t).toFixed(1)} dB off it${q != null ? `, leaving it ${(t - q).toFixed(1)} dB above quiet` : ''}.`);
+  if (w != null && wOff != null) out.push(`Web Audio: the canceller takes ${(wOff - w).toFixed(1)} dB off.`);
+  if (y != null && t != null) out.push(`You are ${(y - t).toFixed(1)} dB above her voice on the cancelled stream: a voice-energy barge-in needs a clear margin here (about 10 dB or more).`);
+  $('verdict').textContent = out.join(' ');
+}
+
+async function during(name, run) {
+  for (const b of document.querySelectorAll('button')) b.disabled = true;
+  delete stats[name]; phase = name; $('phase').textContent = `measuring: ${name}`;
+  try { await run(); } finally {
+    phase = null; $('phase').textContent = '';
+    for (const b of document.querySelectorAll('button')) b.disabled = b.id === 'start';
+    show();
+  }
+}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+$('start').onclick = async () => {
+  ctx = new AudioContext();
+  meters = [await meter(true), await meter(false)];
+  $('settings').textContent = 'settings: ' + meters.map(m => `${m.key}: echoCancellation=${m.settings.echoCancellation} noiseSuppression=${m.settings.noiseSuppression}`).join(' · ');
+  for (const b of document.querySelectorAll('button')) b.disabled = b.id === 'start';
+  requestAnimationFrame(tick);
+};
+$('quiet').onclick = () => during('quiet', () => wait(4000));
+$('you').onclick = () => during('you', () => wait(5000));
+$('tts').onclick = () => during('her voice', () => new Promise(res => {
+  const u = new SpeechSynthesisUtterance(LINE);
+  u.onend = u.onerror = res;
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}));
+// a speech-like test sound played by Chrome itself: a 180 Hz buzz, its loudness moving like syllables
+$('wa').onclick = () => during('Web Audio', async () => {
+  const o = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), depth = ctx.createGain();
+  o.type = 'sawtooth'; o.frequency.value = 180; lfo.frequency.value = 4; depth.gain.value = 0.15; g.gain.value = 0.2;
+  lfo.connect(depth).connect(g.gain); o.connect(g).connect(ctx.destination);
+  o.start(); lfo.start(); await wait(5000); o.stop(); lfo.stop();
+});
+</script>
+</body>
+</html>
