@@ -51,6 +51,17 @@ const rows = p => p.rows.map(r => `${r.who}${r.via ? ':' + r.via : ''}${r.channe
   tts.finish();
   await p.say('   ');
   ok(backend.turns.length === 3, 'an empty line is no turn');
+  // the echo-cancelled mic: the recognizer listens to its track, the textual echo is off; unlisten stops it
+  p.unlisten();
+  let stopped = 0, args = null;
+  const stream = { getAudioTracks: () => [{ label: 'cancelled' }], getTracks: () => [{ stop: () => stopped++ }] };
+  p.listen({ start(...a) { args = a; }, stop() {} }, { stream });
+  ok(args?.[0]?.label === 'cancelled' && p.dialog.textEcho === false && p.recognizer.track, 'listen on a stream: start(track), the textual echo off');
+  p.unlisten();
+  ok(stopped === 1 && p.stream === null, 'unlisten stops the stream');
+  p.listen({ start() {}, stop() {} });
+  ok(p.dialog.textEcho === true, 'the raw mic: the textual echo on');
+  p.unlisten();
 }
 
 // 2. voice off: the chat, no speech
