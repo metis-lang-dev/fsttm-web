@@ -125,7 +125,8 @@ $('bargeSel').onchange = () => { dialog.bargeIn = $('bargeSel').value; bench.log
 
 function onEvent(e) {
   switch (e.kind) {
-    case 'final': if (e.text) line('user', e.text, `final · ${e.state}`); break;
+    // the user's row is the dialog's heard (the final past her echo): her own words heard back stay in the events
+    case 'heard': if (e.text) line('user', e.text, `final · ${e.state}${e.echo ? ` · her echo before it dropped: "${e.echo}"` : ''}`); break;
     case 'speak': line('agent', e.sentences.join(' '), e.why); break;
     case 'cut': line('cut', `[interrupted · ${e.why}] heard: "${e.heard ?? ''}"`,
       `onset→cut ${e.onsetToCutMs != null ? Math.round(e.onsetToCutMs) + ' ms' : '—'}${e.estimated ? ' · heard estimated' : ''}` +
@@ -133,7 +134,6 @@ function onEvent(e) {
     case 'resume': line('cut', `resuming (${e.why}) from the cut word`); break;
     case 'fsttm': trail.push({ state: e.dst, t: e.t }); if (trail.length > 7) trail.shift(); break;
     case 'attention': if (e.action === 'ignore') line('cut', `ignored: asleep — say "${attention.wake.at(-1)} …", flip the switch, or type`); break;
-    case 'echo': if (e.final) line('cut', `dropped as her own echo: "${e.text}"`); break;
     case 'keyword_stop': line('cut', `stop: "${e.text}"`); break;
     case 'llm': $('status').textContent = `reply ${Math.round(e.ms)} ms`; break;
     case 'llm_aborted': $('status').textContent = 'reply aborted'; break;
