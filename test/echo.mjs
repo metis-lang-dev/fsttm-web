@@ -52,6 +52,9 @@ for (const sp of [LINES, CARD, ['Stop the timer.']]) check(`"stop" is never echo
 { const Q = ['Have you ever thought about how all those different worlds manage to stay in orbit around the Sun?']; // Chrome, 2026-10-24
   check('the growing edge: "managed to" for "manage to" is echo', isEcho('Have you ever thought about how all those different worlds managed to', Q) && isEcho('managed to stay', Q),
     past('Have you ever thought about how all those different worlds managed to', Q)); }
+{ const R = splitSentences('That sounds like a fun little experiment! Word dialogue is super interesting because it lets us explore how different ways of speaking can change the whole mood.'); // Chrome bench, 2026-10-24 28.3 s
+  const t = 'That sounds like a fun little experiment can we continue to explore how different';
+  check('her echo, the user\'s words, hers again: not echo, the user\'s words go on', !isEcho(t, R) && pastEcho(t, R).startsWith('can we continue'), past(t, R)); }
 check('nothing said: nothing is echo', !isEcho('counter top three', []));
 // the prefix split: the echo first, then the user
 check('pastEcho: a re-spelled echo, then the user', pastEcho('counter top three put the apple in the fridge', LINES) === 'put the apple in the fridge', past('counter top three put the apple in the fridge', LINES));
