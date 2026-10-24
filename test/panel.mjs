@@ -74,6 +74,9 @@ const rows = p => p.rows.map(r => `${r.who}${r.via ? ':' + r.via : ''}${r.channe
 // 3. the backend's narration: a row, voiced when the floor is free, heard back
 {
   const { p, backend, tts, frames } = make();
+  const before = p.rows.length;
+  p.backend.onFrame({ ev: 'narration', id: 'r6', kind: 'v3-turn', sentence: 'The game is over: start a new game to give another task.' });
+  ok(p.rows.length === before, 'a v3-turn narration is the turn\'s voice: no row of its own, nothing spoken');
   p.backend.onFrame({ ev: 'narration', id: 'r7', kind: 'v3-voice', sentence: 'The modal dialog is up.' });
   ok(p.rows[0].who === 'agent' && p.rows[0].narration === 'v3-voice' && tts.spoken[0] === 'The modal dialog is up.', 'a narration is a row and is voiced');
   tts.finish();
