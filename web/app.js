@@ -49,6 +49,7 @@ const panel = new Panel($('dialog'), {
   // where this Chrome has it; the mic wakes her unless ?asleep keeps the wake-word start
   mic: q.has('raw_mic') ? null : cancelledMic, onDevice: true, micWakes: !q.has('asleep'),
   flipKey: null, holdKey: null,          // no side channel here: Space and Ctrl+Space stay the page's
+  host: q.has('host'),                    // ?host: the rows, the events and the state back to the host (the wire's backchannel)
   onEvent: e => {
     if (e.kind === 'heard' || e.kind === 'typed') $('status').textContent = 'thinking…';
     else if (e.kind === 'llm') $('status').textContent = `reply ${Math.round(e.ms)} ms`;

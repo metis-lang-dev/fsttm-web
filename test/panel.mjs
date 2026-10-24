@@ -217,14 +217,16 @@ const rows = p => p.rows.map(r => `${r.who}${r.via ? ':' + r.via : ''}${r.channe
 }
 // the narration rule, the stop note, the echo before a final, the application's frames as events
 {
-  const { p, tts, frames } = make({ narrate: f => f.kind === 'announce' });
+  const { p, tts, frames } = make({ narrate: f => f.kind === 'announce', frames: f => f.ev === 'runtime' });
   p.backend.onFrame({ ev: 'narration', id: 'a1', kind: 'quiescence', form: 'N', sentence: 'All quiet.' });
   ok(tts.spoken.length === 0 && /shown, not voiced/.test(p.rows.at(-1).meta), 'narrate(): a kind it does not voice is shown, not voiced');
   p.backend.onFrame({ ev: 'narration', id: 'a2', kind: 'announce', form: 'N', sentence: 'The door opened.' });
   ok(tts.spoken.at(-1) === 'The door opened.', 'narrate(): a kind it voices is spoken');
   tts.finish();
   p.backend.onFrame({ ev: 'runtime', kind: 'tick', n: 3 });
-  ok(frames.at(-1).ev === 'runtime' && p.bench.events.some(e => e.kind === 'runtime' && e.of === 'tick' && e.n === 3), "the application's frame: the page's, and an event");
+  ok(frames.at(-1).ev === 'runtime' && p.bench.events.some(e => e.kind === 'frame' && e.ev === 'runtime' && e.of === 'tick' && e.n === 3), "the application's frame: the page's, and an event of kind frame where kept");
+  p.backend.onFrame({ ev: 'cut', id: 'x', heard: 'not a barge-in' });
+  ok(frames.at(-1).ev === 'cut' && !p.bench.events.some(e => e.ev === 'cut' || (e.kind === 'cut' && e.heard === 'not a barge-in')), "an application's frame named like a dialog kind: not kept, never a cut");
   p.dialog.say(['Mountains are tall and very old, older than the rivers.'], 'announce'); tts.finish();   // her words, heard back on the raw mic
   await p.say('mountains are tall and very old what about the moon', { via: 'voice' });
   const moon = p.rows.find(r => r.who === 'person' && r.text === 'what about the moon');
@@ -233,6 +235,47 @@ const rows = p => p.rows.map(r => `${r.who}${r.via ? ':' + r.via : ''}${r.channe
   await p.say('stop');
   ok(p.rows.at(-1).who === 'note' && p.rows.at(-1).text === 'stop: "stop"', 'a stop phrase: a note');
   ok(Object.keys(SECTIONS).join() === 'floor,state,turns,events', 'the sections: floor, state, turns, events');
+}
+
+// the host's backchannel: chat as the person and as her, ctl; the rows, events and state back (host: true)
+{
+  const { p, backend, tts } = make({ host: true, modes: ['talk', 'intent'] });
+  const sent = []; backend.send = f => sent.push(f);
+  const of = ev => sent.filter(f => f.ev === ev);
+  backend.onFrame({ ev: 'chat', who: 'user', text: 'go to the panel' });
+  for (let i = 0; i < 5; i++) await tick();
+  ok(backend.turns.at(-1)?.text === 'go to the panel' && p.rows.find(r => r.who === 'person')?.via === 'host', 'chat{user}: the one entry, a turn, the row via host');
+  const user = of('chat').find(f => f.who === 'user');
+  ok(user?.text === 'go to the panel' && user.via === 'host' && user.id === backend.turns.at(-1).id, 'back: chat{user} with its source and turn id', user);
+  ok(of('chat').some(f => f.who === 'intent') && of('chat').some(f => f.who === 'system' && f.text === 'I move to panel.' && f.via === 'backend'), 'back: the intent row and her reply');
+  ok(of('chat').some(f => f.who === 'system' && f.text === 'I move to panel.' && f.tags.includes('spoken')), 'back: the reply again when tagged spoken');
+  tts.finish();
+  backend.onFrame({ ev: 'chat', who: 'system', text: 'The door is open.' });
+  ok(tts.spoken.at(-1) === 'The door is open.' && of('chat').some(f => f.who === 'system' && f.via === 'host' && f.text === 'The door is open.' && f.kind === 'announce'), 'chat{system}: her words, spoken, back as the host\'s');
+  tts.finish();
+  backend.onFrame({ ev: 'chat', who: 'system', text: 'Shown only.', voice: false });
+  ok(tts.spoken.at(-1) !== 'Shown only.' && p.rows.at(-1).text === 'Shown only.', 'chat{system, voice:false}: shown, not spoken');
+  backend.onFrame({ ev: 'ctl', barge_in: 'energy', voice: false, reply: 'intent' });
+  ok(p.dialog.bargeIn === 'energy' && !p.voice && p.reply === 'intent', 'ctl: barge-in, voice, reply');
+  const st = of('state').at(-1);
+  ok(st?.barge_in === 'energy' && st.voice === false && st.reply === 'intent', 'back: the state after it', st);
+  const n = of('state').length; p.changed(); p.changed();
+  ok(of('state').length === n, 'the state goes back on a change only');
+  backend.onFrame({ ev: 'ctl', mode: 'talk' });
+  ok(p.reply === 'talk', "ctl{mode}: the reply mode's other name");
+  let mic = null; p.onMic = on => { mic = on; };
+  backend.onFrame({ ev: 'ctl', mic: true });
+  ok(mic === true, 'ctl{mic}: to the view');
+  ok(of('event').some(e => e.kind === 'ctl') && of('event').some(e => e.kind === 'fsttm') && of('event').every(e => typeof e.t === 'number'), 'back: every dialog event, timed');
+  ok(!p.bench.events.some(e => e.kind === 'chat' || e.kind === 'ctl' && e.of), 'the host frames are not taken for the application\'s own');
+}
+// a page that does not opt in sends nothing back
+{
+  const { p, backend } = make();
+  const sent = []; backend.send = f => sent.push(f);
+  backend.onFrame({ ev: 'chat', who: 'user', text: 'go to the door' });
+  for (let i = 0; i < 5; i++) await tick();
+  ok(backend.turns.length === 1 && sent.length === 0, 'no host: chat{user} still the one entry, nothing sent back');
 }
 
 await tick();

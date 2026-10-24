@@ -181,7 +181,42 @@ each an object with `ev`:
 **An application extends the wire** with frames of its own, either way. Any
 other `ev` is the application's: the library neither defines nor needs it.
 `WsBackend` hands unknown frames to `onFrame`, and `send(frame)` sends the
-page's own. `parse()` accepts any frame with an `ev`.
+page's own. `parse()` accepts any frame with an `ev`. The panel keeps them as
+events only where the page asks (`frames: true` or a predicate), as kind `frame`.
+
+### The host's backchannel
+
+A program on the host (a test, a script, a person at a terminal) drives the panel and
+reads it as the person sees it, on the same socket:
+
+| direction | frame | what |
+|---|---|---|
+| host → page | `chat{who: "user", text, id?}` | a line as the person's: the panel's one entry (the floor, attention, a turn) |
+| host → page | `chat{who: "system", text, id?, voice?}` | her words: shown, and spoken unless `voice` is false (a narration, kind announce) |
+| host → page | `ctl{barge_in?, voice?, attention?, reply?, mic?}` | the strip: words / energy / none, on / off, awake / asleep, one of the page's modes (`mode` is the same), mic on / off |
+| page → host | `chat{who, text, row, id, via, tags, kind?}` | every row the panel shows, again on each new tag: who `user` / `system` / `intent` / `note`, via `typed` / `heard` / `host` / `say` / `backend` / `panel`, tags `spoken`, `cut · heard "…"` … |
+| page → host | `event{kind, t, …}` | every dialog event (an application's own frames never) |
+| page → host | `state{floor, attention, channel, mode, reply, barge_in, recognizer, voice, listening}` | on every change |
+
+The page sends back only when it opts in: `new Panel(el, { host: true })` (or `{rows,
+events, state}`); the reference page with `?host`. The host's side is `fsttm_web.chat`:
+
+```python
+from fsttm_web.chat import Chat, Relay
+chat = Chat(sock.send_json)          # in the backend's handler of the page's socket ...
+if chat.feed(frame): ...             # ... which hands it every frame (True: the host's)
+chat = await Chat.connect("ws://127.0.0.1:8397/host")    # or from another process, through a Relay
+await chat.user("hello there")
+row = await chat.expect(lambda f: "spoken" in f["tags"], ev="chat", who="system")
+await chat.ctl(barge_in="energy")
+await chat.expect(lambda f: f["barge_in"] == "energy", ev="state")
+await chat.system("The door is open.", voice=False)
+```
+
+`Relay` joins one server's page sockets and host sockets; `fsttm_web.aiohttp.host_route(app,
+relay)` serves the hosts at `/host` (`examples/serve.py` has both). At a terminal:
+`python -m fsttm_web.chat ws://127.0.0.1:8397/host`: lines are the person's, `/system …`
+speaks as her, `/ctl barge_in=energy voice=0` sets the strip, `/events` shows the events.
 
 ## Packages: JS and Python, one source
 
@@ -254,9 +289,10 @@ Ctrl+Shift+R.
 ## Tests
 
 ```
-npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table) + test/echo.mjs (the echo measure on re-spelled echoes, and a narration backlog) + test/panel.mjs (the panel's logic) + test/ws.mjs (the wire's adapter) + test/narrator.mjs (the narrator on a stub synth beside the dialog's TTS)
-pytest test/test_python.py       # the package: one source, the stub backend, the mount
+npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table) + test/echo.mjs (the echo measure on re-spelled echoes, and a narration backlog) + test/panel.mjs (the panel's logic, the backchannel) + test/bench.mjs (the numbers kept as events come) + test/ws.mjs (the wire's adapter) + test/narrator.mjs (the narrator on a stub synth beside the dialog's TTS)
+pytest test/test_python.py       # the package: one source, the stub backend, the mount, Chat and the Relay
 node test/page_e2e.mjs           # the browser suite (node >= 22, Chrome): the reference page as one panel on ?backend=stub
+pytest test/test_host_e2e.py     # the host's backchannel: examples/serve.py + the page in headless Chrome, driven by fsttm_web.chat
 ```
 
 ## License

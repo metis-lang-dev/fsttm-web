@@ -26,6 +26,29 @@ Backend → page
                                      page voices it when the floor is free
                                      (form R: shown, never voiced)
 
+Host ↔ page: the panel's backchannel (lib/panel.js; fsttm_web.chat is the host's side). The
+host is whoever holds the backend's socket; the page sends back only when it opts in (Panel's
+`host`, the reference page's ?host).
+
+Host → page
+    chat   {who: "user", text, id?}     a line as the person's: the panel's one entry (the
+                                        floor, attention, a turn on the backend)
+    chat   {who: "system", text, id?, voice?}
+                                        her words: shown, and spoken unless voice is false
+                                        (a narration, kind announce, behind it)
+    ctl    {barge_in?, voice?, attention?, reply?, mic?}
+                                        the strip's controls: barge_in words|energy|none,
+                                        attention awake|asleep, reply one of the page's
+                                        modes ("mode" is its other name), mic on|off
+Page → host
+    chat   {who, text, row, id, via, tags, kind?}
+                                        every row the panel shows, and again on each new
+                                        tag: who user|system|intent|note, via typed|heard|
+                                        host|say|backend|panel, tags spoken, cut · heard …
+    event  {kind, t, …}                 every dialog event (the panel's events section)
+    state  {floor, attention, channel, mode, reply, barge_in, recognizer, voice, listening}
+                                        on every change
+
 An application extends the wire with frames of its own, either way: any other
 `ev` is the application's. The library neither defines nor needs them; the
 reference page logs those it does not know (WsBackend's onFrame), and a page
@@ -88,6 +111,25 @@ def error(id, err):
 
 def narration(id, sentence, kind="announce", form="N", path="", line=""):
     return {"ev": "narration", "id": id, "path": path, "kind": kind, "form": form, "line": line, "sentence": sentence}
+
+
+def chat(who, text, id=None, voice=None):
+    """A chat line to the page: who "user" (as the person) or "system" (as her)."""
+    f = {"ev": "chat", "who": who, "text": text}
+    if id is not None:
+        f["id"] = id
+    if voice is not None:
+        f["voice"] = bool(voice)
+    return f
+
+
+def ctl(**controls):
+    """The strip's controls to the page: barge_in, voice, attention, reply (or mode), mic."""
+    return {"ev": "ctl", **{k: v for k, v in controls.items() if v is not None}}
+
+
+HOST_FRAMES = ("chat", "event", "state")
+"""The frames a page sends its host (the backchannel), as a backend tells them from its own."""
 
 
 def sentences(text):
