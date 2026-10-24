@@ -36,15 +36,18 @@ const USER = [
   [LINES, 'what is in the fridge'], [LINES, 'new game'], [CARD, 'what can you do'], [CARD, 'start a new game'],
   [CARD, 'put the pencil in the drawer'], [CARD, 'tell me more'],
 ];
+const past = (t, sp) => JSON.stringify(pastEcho(t, sp));
 let minEcho = 1, maxUser = 0;
 for (const [sp, t] of ECHOES) { const s = echoShare(t, sp); minEcho = Math.min(minEcho, s); check(`echo ${s.toFixed(2)} "${t}"`, isEcho(t, sp), s); }
 for (const [sp, t] of USER) { const s = echoShare(t, sp); maxUser = Math.max(maxUser, s); check(`user ${s.toFixed(2)} "${t}"`, !isEcho(t, sp) && pastEcho(t, sp) === t, `${s} past "${pastEcho(t, sp)}"`); }
 console.log(`     echoes share ${minEcho.toFixed(2)}–1.00, the user's words at most ${maxUser.toFixed(2)}; ECHO = ${ECHO}`);
 check('ECHO lies between them', minEcho >= ECHO && maxUser < ECHO, `${minEcho} ${maxUser}`);
 for (const sp of [LINES, CARD, ['Stop the timer.']]) check(`"stop" is never echo (${sp[0].slice(0, 20)}…)`, !isEcho('stop', sp));
+{ const Q = ['Have you ever thought about how all those different worlds manage to stay in orbit around the Sun?']; // Chrome, 2026-10-24
+  check('the growing edge: "managed to" for "manage to" is echo', isEcho('Have you ever thought about how all those different worlds managed to', Q) && isEcho('managed to stay', Q),
+    past('Have you ever thought about how all those different worlds managed to', Q)); }
 check('nothing said: nothing is echo', !isEcho('counter top three', []));
 // the prefix split: the echo first, then the user
-const past = (t, sp) => JSON.stringify(pastEcho(t, sp));
 check('pastEcho: a re-spelled echo, then the user', pastEcho('counter top three put the apple in the fridge', LINES) === 'put the apple in the fridge', past('counter top three put the apple in the fridge', LINES));
 check('pastEcho: a misheard word inside the echo stays in it', pastEcho('I take tomato won from countertop three', LINES) === '', past('I take tomato won from countertop three', LINES));
 { const LONG = splitSentences('There are 3 apples on the countertop and 12 eggs in the fridge, and the milk is on shelf 2. ' +
