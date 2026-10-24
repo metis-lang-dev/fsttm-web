@@ -18,7 +18,7 @@ const CARD = splitSentences('ALFWorld: a household scene from ALFRED, in text mo
 const REPLY = ['What a lovely evening it is. Tell me about your plans for tonight, please.'];
 
 // ── the measure ───────────────────────────────────────────────────────
-check('norm spells numbers, keeps letters', norm('Countertop 3, tomato1 & 42!') === 'countertopthreetomatoonefortytwo', norm('Countertop 3, tomato1 & 42!'));
+check('norm spells numbers, keeps letters, one of a doubled letter', norm('Countertop 3, tomato1 & 42!') === 'countertopthretomatoonefortytwo' && norm('All right') === norm('Alright'), norm('Countertop 3, tomato1 & 42!'));
 // [spoken, transcript]: what the recognizer made of her (the brief's corpus; the backlog = all seven lines)
 const ECHOES = [
   [['I go to countertop 3.'], 'counter top three'],
@@ -28,6 +28,7 @@ const ECHOES = [
   [CARD, 'Alf World the house'], [CARD, 'Alf World the'], [CARD, 'Alf World'],
   [LINES, 'counter top three'], [LINES, 'Countered I take tomato one from countertop'],
   [LINES, 'I go to microwave one I open microwave one'], [LINES, 'one in microwave one'],
+  [['Alright, back to the basics with one through five!'], 'All right'], // the user's bench, 2026-10-24 125.6 s: an energy cut on it
 ];
 // the user's words over the same speech
 const USER = [
@@ -55,6 +56,7 @@ for (const sp of [LINES, CARD, ['Stop the timer.']]) check(`"stop" is never echo
 { const R = splitSentences('That sounds like a fun little experiment! Word dialogue is super interesting because it lets us explore how different ways of speaking can change the whole mood.'); // Chrome bench, 2026-10-24 28.3 s
   const t = 'That sounds like a fun little experiment can we continue to explore how different';
   check('her echo, the user\'s words, hers again: not echo, the user\'s words go on', !isEcho(t, R) && pastEcho(t, R).startsWith('can we continue'), past(t, R)); }
+check('a short phrase of words she said apart is the user\'s', !isEcho('Can we', ['Word dialogue lets us explore how different ways of speaking can change the whole mood.']));
 check('nothing said: nothing is echo', !isEcho('counter top three', []));
 // the prefix split: the echo first, then the user
 check('pastEcho: a re-spelled echo, then the user', pastEcho('counter top three put the apple in the fridge', LINES) === 'put the apple in the fridge', past('counter top three put the apple in the fridge', LINES));
