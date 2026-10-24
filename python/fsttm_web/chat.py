@@ -80,16 +80,27 @@ class Chat:
         async with self._cond:
             self._cond.notify_all()
 
-    async def expect(self, pred=None, timeout=5.0, **match):
-        """The next frame from the page (on from the last one expect() returned) whose fields
-        equal match and for which pred(frame) holds; TimeoutError after timeout seconds."""
+    def mark(self):
+        """Where the frames are now: expect(since=mark) looks from here, whatever came first."""
+        return len(self.frames)
+
+    async def expect(self, pred=None, timeout=5.0, since=None, **match):
+        """The next frame from the page whose fields equal match and for which pred(frame) holds;
+        TimeoutError after timeout seconds. By default it reads on from the last frame an expect()
+        returned (the frames it passes are used up); with since=mark() it looks at every frame
+        from the mark and uses nothing up, so two waits need not come in the frames' order."""
         loop = asyncio.get_running_loop()
         end = loop.time() + timeout
+        i = since
         async with self._cond:
             while True:
-                while self._cursor < len(self.frames):
-                    f = self.frames[self._cursor]
-                    self._cursor += 1
+                while (i if since is not None else self._cursor) < len(self.frames):
+                    if since is not None:
+                        f = self.frames[i]
+                        i += 1
+                    else:
+                        f = self.frames[self._cursor]
+                        self._cursor += 1
                     if _matches(f, pred, match):
                         return f
                 left = end - loop.time()

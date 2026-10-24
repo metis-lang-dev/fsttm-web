@@ -60,8 +60,9 @@ def test_a_host_drives_the_page_and_reads_it():
             await asyncio.sleep(0.3)
 
             # as the person: the one entry, a turn on the stub, her answer spoken
-            await chat.user("hello there")
-            u = await chat.expect(ev="chat", who="user", timeout=10)
+            m = chat.mark()
+            await chat.user("hello there", id="q1")
+            u = await chat.expect(ev="chat", who="user", host_id="q1", since=m, timeout=10)
             assert u["text"] == "hello there" and u["via"] == "host" and u["id"]
             s = await chat.expect(lambda f: f["text"].startswith("You said: hello there.") and "spoken" in f["tags"],
                                   ev="chat", who="system", timeout=20)

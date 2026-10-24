@@ -41,10 +41,11 @@ Host → page
                                         attention awake|asleep, reply one of the page's
                                         modes ("mode" is its other name), mic on|off
 Page → host
-    chat   {who, text, row, id, via, tags, kind?}
+    chat   {who, text, row, id, via, tags, kind?, host_id?}
                                         every row the panel shows, and again on each new
                                         tag: who user|system|intent|note, via typed|heard|
-                                        host|say|backend|panel, tags spoken, cut · heard …
+                                        host|say|backend|panel, tags spoken, cut · heard …;
+                                        host_id the id the host gave its own line
     event  {kind, t, …}                 every dialog event (the panel's events section)
     state  {floor, attention, channel, mode, reply, barge_in, recognizer, voice, listening}
                                         on every change

@@ -90,6 +90,11 @@ def test_chat_feeds_and_expects():
         assert f["text"] == "I go." and chat.said() == ["I go."]
         chat.feed({"ev": "state", "floor": "FREEs", "barge_in": "none"})
         assert (await chat.expect(ev="state"))["barge_in"] == "none" and chat.state["floor"] == "FREEs"
+        m = chat.mark()
+        chat.feed({"ev": "event", "kind": "speak", "t": 1})
+        chat.feed({"ev": "event", "kind": "final", "t": 2})
+        assert (await chat.expect(ev="event", kind="final", since=m))["t"] == 2      # in any order from a mark,
+        assert (await chat.expect(ev="event", kind="speak", since=m))["t"] == 1      # nothing used up
         try:
             await chat.expect(ev="chat", timeout=0.05)
             raise AssertionError("expect() past the last frame must time out")

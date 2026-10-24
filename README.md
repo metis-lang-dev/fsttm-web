@@ -194,7 +194,7 @@ reads it as the person sees it, on the same socket:
 | host → page | `chat{who: "user", text, id?}` | a line as the person's: the panel's one entry (the floor, attention, a turn) |
 | host → page | `chat{who: "system", text, id?, voice?}` | her words: shown, and spoken unless `voice` is false (a narration, kind announce) |
 | host → page | `ctl{barge_in?, voice?, attention?, reply?, mic?}` | the strip: words / energy / none, on / off, awake / asleep, one of the page's modes (`mode` is the same), mic on / off |
-| page → host | `chat{who, text, row, id, via, tags, kind?}` | every row the panel shows, again on each new tag: who `user` / `system` / `intent` / `note`, via `typed` / `heard` / `host` / `say` / `backend` / `panel`, tags `spoken`, `cut · heard "…"` … |
+| page → host | `chat{who, text, row, id, via, tags, kind?, host_id?}` | every row the panel shows, again on each new tag: who `user` / `system` / `intent` / `note`, via `typed` / `heard` / `host` / `say` / `backend` / `panel`, tags `spoken`, `cut · heard "…"` …; `host_id` the id the host gave its own line |
 | page → host | `event{kind, t, …}` | every dialog event (an application's own frames never) |
 | page → host | `state{floor, attention, channel, mode, reply, barge_in, recognizer, voice, listening}` | on every change |
 
@@ -211,6 +211,9 @@ row = await chat.expect(lambda f: "spoken" in f["tags"], ev="chat", who="system"
 await chat.ctl(barge_in="energy")
 await chat.expect(lambda f: f["barge_in"] == "energy", ev="state")
 await chat.system("The door is open.", voice=False)
+m = chat.mark()                      # waits from a mark use nothing up: any order
+await chat.user("go on", id="q7")
+await chat.expect(ev="chat", who="user", host_id="q7", since=m)
 ```
 
 `Relay` joins one server's page sockets and host sockets; `fsttm_web.aiohttp.host_route(app,
