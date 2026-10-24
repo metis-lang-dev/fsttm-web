@@ -168,5 +168,16 @@ async function backlog(c, lines = LINES) {
   const c = make(); await backlog(c); c.adv(1000); await c.d.final('stop');
   check('"stop" just after the backlog: not echo', c.events.some(e => e.kind === 'keyword_stop'), JSON.stringify(c.events.slice(-3)));
 }
+{ // the recognizer on the echo-cancelled track: start(track), and the raw mic where a browser refuses it
+  const { attachRecognizer } = await import('fsttm-web/dialog');
+  const log = []; const dlg = { log: (k, f) => log.push([k, f]), speechStart() {}, interim() {}, final() {} };
+  const track = { label: 'mic (cancelled)' };
+  const rec = { starts: [], start(...a) { this.starts.push(a.length); }, stop() {} };
+  const ctl = attachRecognizer(rec, dlg, { track }); rec.onend();
+  check('start(track) at start and at every restart', rec.starts.join() === '1,1' && ctl.track === track && log.some(([k, f]) => k === 'rec_track' && f.used), JSON.stringify([rec.starts, log]));
+  const old = { starts: [], start(...a) { if (a.length) throw new TypeError('no track'); this.starts.push(0); }, stop() {} };
+  log.length = 0; const ctl2 = attachRecognizer(old, dlg, { track }); old.onend();
+  check('refused: the raw mic, logged once', old.starts.join() === '0,0' && ctl2.track === null && log.filter(([k]) => k === 'rec_track').length === 1, JSON.stringify([old.starts, log]));
+}
 console.log(`${pass}/${pass + fail} echo checks`);
 process.exit(fail ? 1 : 0);

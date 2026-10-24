@@ -7,7 +7,7 @@ import { loadAssets, LlamaBackend } from './backend/llama.js';
 import { connect } from './backend/ws.js';
 import { FSTTM } from 'fsttm-web/fsttm';
 import { Attention } from 'fsttm-web/attention';
-import { Dialog, attachRecognizer } from 'fsttm-web/dialog';
+import { Dialog, attachRecognizer, cancelledMic } from 'fsttm-web/dialog';
 import { BrowserTTS, splitSentences } from 'fsttm-web/tts';
 import { Narrator, attachSelection, attachKey, narratorView } from 'fsttm-web/narrator';
 import { Bench } from './bench.js';
@@ -258,7 +258,7 @@ $('chatForm').onsubmit = e => {
   dialog.final(user);
 };
 
-let recCtl = null;
+let recCtl = null, micStream = null;
 async function micOn() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { line('error', 'no SpeechRecognition in this browser'); return; }
@@ -268,7 +268,10 @@ async function micOn() {
   if (!q.has('asleep') && attention.force(true)) bench.log('attention', { state: 'AWAKE', forced: 'mic' });
   const rec = new SR();
   if (recognition.processLocally) rec.processLocally = true;
-  recCtl = attachRecognizer(rec, dialog);
+  // the recognizer listens through the echo canceller (?raw_mic: the raw mic, as before)
+  micStream = q.has('raw_mic') ? null : await cancelledMic().catch(e => { line('error', `${e.name}: ${e.message}`, 'echo-cancelled mic'); return null; });
+  recCtl = attachRecognizer(rec, dialog, { track: micStream?.getAudioTracks()[0] ?? null });
+  line('cut', recCtl.track ? 'the recognizer listens through the echo canceller' : 'the recognizer listens to the raw mic: her voice reaches it, the echo is dropped by text');
   $('micBtn').textContent = 'mic on';
   $('micDot').className = 'inline-block w-2.5 h-2.5 rounded-full bg-emerald-400';
   showState(); scheduleStats();
@@ -276,6 +279,7 @@ async function micOn() {
 
 function micOff() {
   recCtl.stop(); recCtl = null;
+  micStream?.getTracks().forEach(t => t.stop()); micStream = null;
   $('micBtn').textContent = 'mic off';
   $('micDot').className = 'inline-block w-2.5 h-2.5 rounded-full bg-slate-700';
   if (attention.force(false)) bench.log('attention', { state: 'ASLEEP', forced: 'mic' });
