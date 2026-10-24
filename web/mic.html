@@ -111,7 +111,7 @@ function show() {
   const q = mean('quiet', 'on'), t = mean('her voice', 'on'), w = mean('Web Audio', 'on'), y = mean('you', 'on');
   const tOff = mean('her voice', 'off'), wOff = mean('Web Audio', 'off');
   const out = [];
-  if (t != null && tOff != null) out.push(`Her voice: the canceller takes ${(tOff - t).toFixed(1)} dB off it${q != null ? `, leaving it ${(t - q).toFixed(1)} dB above quiet` : ''}.`);
+  if (t != null && tOff != null) out.push(`Her voice: the canceller takes ${(tOff - t).toFixed(1)} dB off it${q != null ? `, leaving it ${Math.abs(t - q).toFixed(1)} dB ${t >= q ? 'above' : 'below'} quiet` : ''}.`);
   if (w != null && wOff != null) out.push(`Web Audio: the canceller takes ${(wOff - w).toFixed(1)} dB off.`);
   if (y != null && t != null) out.push(`You are ${(y - t).toFixed(1)} dB above her voice on the cancelled stream: a voice-energy barge-in needs a clear margin here (about 10 dB or more).`);
   $('verdict').textContent = out.join(' ');
