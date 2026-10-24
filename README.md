@@ -117,7 +117,7 @@ window.say = text => panel.say(text);
   narrator (below), always on: its name, coloured while it reads, pauses or is held for the
   dialog, a click its key's press, the sentence and n of N in its title; `voiceWidget(panel,
   {narrator, key})` is the header's one card: [● mic ⟦switch⟧ narrator], no on/off words. `toggleSwitch({label, onChange})` is the switch
-  for anything else.
+  for anything else. Their "on" is green (`--fw-switch-on`), not the page's accent.
 - `meta: true` shows each row's small print: the input's source and the floor, a
   narration's kind and form. `narrate(frame)` says which narrations are voiced (default:
   all but form R). `onDevice: true` asks for on-device recognition; `micWakes` (default)
