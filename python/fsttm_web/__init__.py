@@ -77,6 +77,7 @@ IMPORT_MAP = {
         "fsttm-web/narrator": "./lib/narrator.js",
         "fsttm-web/bench": "./lib/bench.js",
         "fsttm-web/fsmview": "./lib/fsmview.js",
+        "fsttm-web/switch": "./lib/switch.js",
     }
 }
 """The import map a page puts in a <script type="importmap"> so its

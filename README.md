@@ -24,6 +24,7 @@ lib/   fsttm.js fsttm.json   the floor machine and its table (the machine as dat
        fsmview.js            the floor machine drawn (the panel's floor section)
        bench.js              every dialog event, timed, and the barge-in numbers (the panel's state and events)
        narrator.js (+css)    the page's selected text read aloud on one key, beside the dialog (below)
+       switch.js (+css)      an on/off switch with its light for a header row; micSwitch(panel): the panel's mic
        fixtures/             the floor machine's and attention's cases as data (canonical)
 ```
 
@@ -96,7 +97,9 @@ window.say = text => panel.say(text);
   the backend has `modes`: `setReply(v)`; `turn(id, text, mode)` gets it). The mic and the
   voice switch sit by the text line. `controls: false` hides the strip.
 - **The sections**, each a `<details>`, closed until opened; the open ones are kept per
-  page (`storeKey`, the path by default):
+  page (`storeKey`, the path by default). Or each in the page's own element, a dock or a
+  drawer: `sectionsIn: {floor: el, …}`, drawn while the page says it is open
+  (`showSection(name, open)`; the reference page's docks):
   - **floor**: the floor machine (`fsmview.js`), the dwell, the last states, §3.2's costs;
   - **state**: floor, attention, channel, mode, reply, barge-in, recognizer (the
     echo-cancelled track or the raw mic, on-device or cloud), voice; then the numbers the
@@ -104,6 +107,11 @@ window.say = text => panel.say(text);
     reply time, the FREEu dwell, the seconds spoken;
   - **turns**: each turn's mode, words, first token, reply, dwell and how it ended;
   - **events**: the dialog log, capped, with **save (JSONL)** (every event, timed) and **clear**.
+- **The mic in the page's header.** `micButton: false` leaves the mic out of the text line;
+  `micSwitch(panel)` (`lib/switch.js`) is the panel's mic as a header switch: on / off /
+  opening, its light flashing on each word heard. `panel.subscribe(fn)` is how a widget
+  follows the panel: `fn({state})`, `fn({event})`. `toggleSwitch({label, onChange})` is the
+  switch for anything else.
 - `meta: true` shows each row's small print: the input's source and the floor, a
   narration's kind and form. `narrate(frame)` says which narrations are voiced (default:
   all but form R). `onDevice: true` asks for on-device recognition; `micWakes` (default)
@@ -221,6 +229,12 @@ relay)` serves the hosts at `/host` (`examples/serve.py` has both). At a termina
 `python -m fsttm_web.chat ws://127.0.0.1:8397/host`: lines are the person's, `/system …`
 speaks as her, `/ctl barge_in=energy voice=0` sets the strip, `/events` shows the events.
 
+A backend without a socket (llama-server) carries no backchannel, so the page opens one of
+its own: `new Panel(el, { hostLink })`, a `WsBackend` on a Relay's `/page`
+(`fsttm_web.aiohttp.page_route`; `host` is then on by default). `python -m fsttm_web.chat
+--serve 8395` is that Relay with the terminal as its host (other hosts at `/host`); `run.sh`
+starts it (below).
+
 ## Packages: JS and Python, one source
 
 lib/ is packaged twice, from the same files; nothing is copied by hand.
@@ -259,6 +273,15 @@ assets, made at build time.
 MODEL=<gemma4 gguf> ./run.sh     # llama-server serving the page: http://localhost:8393
 ```
 
+At a terminal, run.sh keeps the terminal as the host's backchannel: llama-server runs in
+the background (its log in `$TMPDIR/fsttm-web-llama-PORT.log`), and what you type is the
+person's line in the page, whose rows print back (`/system …`, `/quiet …`, `/ctl …`,
+`/events`, `/quit`; Ctrl+C stops both). It is `python -m fsttm_web.chat --serve` on
+PORT+2 (`HOST_PORT`): the page finds it through `web/assets/host.json`, connects by
+itself (and again after a restart of the terminal), and shows HOST on / waiting in the
+band. It needs a python with aiohttp (`PY=…`, else the `.venv` beside the checkout, or
+python3). `HOST=0`, or stdin not a terminal: llama-server alone, as before.
+
 The dialog runs from page load: type, or press **mic** (it wakes the
 assistant). **replies: long** (the default) is free conversation, several
 sentences to talk over; **short** is the intent turn of the example, a desk
@@ -266,10 +289,12 @@ assistant with a lamp (`prompt/example-prompt.txt`, `grammar/example.gbnf`:
 LIGHT_ON, LIGHT_OFF, TIME, CHITCHAT, UNKNOWN). An application gives its own
 prompt and grammar to `loadAssets`.
 
-The page is one panel (`lib/panel.js`, above) with all four sections, the chat on
-the left and the sections on the right; the strip sets barge-in, attention and the
-replies. `web/app.js` only chooses the backend, sets the narrator (F8) and runs
-`?selftest`.
+The page is one panel (`lib/panel.js`, above) in the consoles' shell (`web/vendor/shell.*`,
+copies of metis-loop's: the band, the docks and their strip, the splitter): the chat on the
+left, aligned with the band; the floor, the state and the events in the docks (the strip
+shows and hides them, a header folds one, the layout is kept); the mic switch in the band.
+The strip sets barge-in, attention and the replies. `web/app.js` only chooses the backend,
+the host link, the docks, the narrator (F8) and runs `?selftest`.
 
 URL options:
 - `?asleep`: start asleep, so the wake word comes first.
@@ -281,11 +306,13 @@ URL options:
 - `?backend=llama|ws|stub`: force a backend; `stub` is in the page (`web/backend/stub.js`), no server.
 - `?narrate=all|none`, `?narrate_rate=1.2`, `?narrate_key=F9`: the narrations voiced, the narrator's rate and key.
 - `?selftest`: the event table in this Chrome.
+- `?host`: the backchannel on a ws backend's socket; `?host=ws://…/page`: on a Relay's (else run.sh's, by itself).
 
-The events section's **save (JSONL)** exports every dialog event, timed.
+The events dock's **save (JSONL)** exports every dialog event, timed.
 
-Styles are Tailwind 3.4.17 with no bundler: `npm run build` turns
-`web/src/input.css` into `web/styles.css`, which is committed.
+The reference page's styles are the shell's (panel.html and mic.html keep their own inline).
+`web/styles.css` (Tailwind 3.4.17, `npm run build` from `web/src/input.css`) is the old page's
+and no page loads it now.
 llama-server sends no cache headers, so after an update reload with
 Ctrl+Shift+R.
 
@@ -295,7 +322,8 @@ Ctrl+Shift+R.
 npm test                         # test/run.mjs (the floor machine and attention on their fixtures) + test/dialog.mjs (the event table) + test/echo.mjs (the echo measure on re-spelled echoes, and a narration backlog) + test/panel.mjs (the panel's logic, the backchannel) + test/bench.mjs (the numbers kept as events come) + test/ws.mjs (the wire's adapter) + test/narrator.mjs (the narrator on a stub synth beside the dialog's TTS)
 pytest test/test_python.py       # the package: one source, the stub backend, the mount, Chat and the Relay
 node test/page_e2e.mjs           # the browser suite (node >= 22, Chrome): the reference page as one panel on ?backend=stub
-pytest test/test_host_e2e.py     # the host's backchannel: examples/serve.py + the page in headless Chrome, driven by fsttm_web.chat
+pytest test/test_host_e2e.py     # the host's backchannel: examples/serve.py + the page in headless Chrome, driven by fsttm_web.chat; and run.sh's terminal (--serve) typing into a page without a socket
+pytest test/test_shell_copies.py # web/vendor/shell.* equal the consoles' past their header
 ```
 
 ## License

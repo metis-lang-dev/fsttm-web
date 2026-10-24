@@ -103,3 +103,77 @@ def test_a_host_drives_the_page_and_reads_it():
             await runner.cleanup()
             shutil.rmtree(prof, ignore_errors=True)
     asyncio.run(run())
+
+
+@pytest.mark.skipif(not CHROME, reason="no Chrome (CHROME=…)")
+def test_the_terminal_drives_a_page_without_a_socket():
+    """run.sh's terminal: python -m fsttm_web.chat --serve (a Relay of its own) and the page on a backend
+    without a socket (here the stub in the page), its hostLink at /page: lines typed on stdin are the
+    person's, the page's rows print on stdout."""
+    import sys
+    from aiohttp import web
+    from fsttm_web.aiohttp import mount
+
+    async def run():
+        port, hport = _free_port(), _free_port()
+        runner = web.AppRunner(mount(web.Application()))
+        await runner.setup()
+        await web.TCPSite(runner, "127.0.0.1", port).start()
+        env = {**os.environ, "PYTHONPATH": str(REPO / "python") + os.pathsep + os.environ.get("PYTHONPATH", "")}
+        term = await asyncio.create_subprocess_exec(sys.executable, "-m", "fsttm_web.chat", "--serve", str(hport),
+                                                    stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                                                    stderr=asyncio.subprocess.PIPE, env=env)
+        prof = tempfile.mkdtemp(prefix="fw-term-chrome-")
+        chrome = None
+        out, err = [], []
+
+        async def pump(stream, into):
+            async for line in stream:
+                into.append(line.decode())
+        pumps = [asyncio.ensure_future(pump(term.stdout, out)), asyncio.ensure_future(pump(term.stderr, err))]
+
+        async def until(pred, what, timeout=15):
+            for _ in range(int(timeout * 10)):
+                if pred():
+                    return
+                await asyncio.sleep(0.1)
+            raise AssertionError(f"{what}: stdout {out[-8:]} stderr {err[-8:]}")
+        try:
+            await until(lambda: any("/page" in l for l in err), "the terminal is up")
+            term.stdin.write(b"before any page\n")
+            await term.stdin.drain()
+            await until(lambda: any("no page yet" in l for l in err), "a line with no page: said so")
+            chrome = subprocess.Popen([CHROME, "--headless=new", f"--user-data-dir={prof}", "--no-first-run",
+                                       f"http://127.0.0.1:{port}/?backend=stub&voice=0&host=ws://127.0.0.1:{hport}/page"],
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            await until(lambda: any("pages open: 1" in l for l in err), "the page connected by itself")
+            await until(lambda: any(l.startswith("state ") for l in out), "the state on connect")
+            term.stdin.write(b"hello there\n")
+            await term.stdin.drain()
+            await until(lambda: any("user · host: hello there" in l for l in out), "the typed line, the person's row")
+            await until(lambda: any("system · backend: You said: hello there." in l for l in out), "the stub's answer printed")
+            term.stdin.write(b"/quiet The door is open.\n/ctl barge_in=energy\n")
+            await term.stdin.drain()
+            await until(lambda: any("system · host: The door is open." in l for l in out), "her words, as the host's")
+            await until(lambda: any(l.startswith("state ") and "barge_in=energy" in l for l in out), "ctl: the state back")
+            term.stdin.write(b"/quit\n")
+            await term.stdin.drain()
+            assert await asyncio.wait_for(term.wait(), 5) == 0
+        finally:
+            if term.returncode is None:
+                term.kill()
+                await term.wait()
+            for p in pumps:
+                p.cancel()
+            if chrome:
+                try:
+                    os.killpg(chrome.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    chrome.wait(5)
+                except subprocess.TimeoutExpired:
+                    os.killpg(chrome.pid, signal.SIGKILL)
+            await runner.cleanup()
+            shutil.rmtree(prof, ignore_errors=True)
+    asyncio.run(run())

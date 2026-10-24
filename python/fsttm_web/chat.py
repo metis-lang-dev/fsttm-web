@@ -24,9 +24,14 @@ From another process, through a Relay on the server (fsttm_web.aiohttp.host_rout
     await chat.close()
 
 and at a terminal: python -m fsttm_web.chat ws://127.0.0.1:8397/host
+
+Where the page's backend holds no socket (llama-server), the terminal is the Relay itself:
+python -m fsttm_web.chat --serve 8395 serves /page (the page's hostLink: ?host=ws://127.0.0.1:8395/page,
+or run.sh's assets/host.json) and /host (other hosts, a test's Chat.connect), and types as a host.
 """
 import asyncio
 import json
+import os
 import sys
 
 from . import protocol as wire
@@ -230,8 +235,68 @@ def _show(f, events):
 
 async def main(url):
     chat = await Chat.connect(url)
-    events = False
     print(f"connected to {url}\n{HELP}", file=sys.stderr)
+    await repl(chat)
+
+
+async def serve(port, bind="127.0.0.1"):
+    """A Relay on port: the pages at /page, other hosts at /host, and this terminal as one more."""
+    from aiohttp import web
+    from .aiohttp import host_route, page_route
+    relay = Relay()
+    chat = Chat(relay.from_host)
+
+    async def heard(frame):
+        chat.feed(frame)
+    relay.add_host(heard)
+    app = web.Application()
+    page_route(app, relay, on_page=lambda n: print(f"-- pages open: {n}", file=sys.stderr, flush=True))
+    host_route(app, relay)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    await web.TCPSite(runner, bind, port).start()
+    print(f"the host's terminal: pages at ws://{bind}:{port}/page, hosts at ws://{bind}:{port}/host\n{HELP}", file=sys.stderr)
+    try:
+        await repl(chat, relay)
+    finally:
+        await runner.cleanup()
+
+
+def _stdin_lines():
+    """stdin's lines on a queue ("" at its end): the loop's reader, so Ctrl-C ends at once (a thread
+    blocked in readline would hold the exit); a thread where stdin cannot be watched."""
+    loop, q = asyncio.get_running_loop(), asyncio.Queue()
+    buf = bytearray()
+
+    def readable():                       # the fd itself: a buffered readline would keep a second line unseen
+        data = os.read(fd, 65536)
+        if not data:
+            loop.remove_reader(fd)
+            if buf:
+                q.put_nowait(buf.decode(errors="replace"))
+            q.put_nowait("")
+            return
+        buf.extend(data)
+        while (i := buf.find(b"\n")) >= 0:
+            q.put_nowait(buf[:i + 1].decode(errors="replace"))
+            del buf[:i + 1]
+    try:
+        fd = sys.stdin.fileno()
+        loop.add_reader(fd, readable)
+    except (NotImplementedError, OSError, ValueError):
+        import threading
+
+        def pump():
+            for line in iter(sys.stdin.readline, ""):
+                loop.call_soon_threadsafe(q.put_nowait, line)
+            loop.call_soon_threadsafe(q.put_nowait, "")
+        threading.Thread(target=pump, daemon=True).start()
+    return q
+
+
+async def repl(chat, relay=None):
+    """stdin lines as the host's (HELP), the page's rows and state printed."""
+    events = False
 
     async def show():
         last = {}
@@ -243,10 +308,10 @@ async def main(url):
             if line:
                 print(line, flush=True)
     printer = asyncio.get_running_loop().create_task(show())
-    loop = asyncio.get_running_loop()
+    lines = _stdin_lines()
     try:
         while True:
-            line = await loop.run_in_executor(None, sys.stdin.readline)
+            line = await lines.get()
             if not line:
                 break
             line = line.strip()
@@ -256,6 +321,8 @@ async def main(url):
                 break
             if line == "/events":
                 events = not events
+            elif relay is not None and not relay.pages and (not line.startswith("/") or line.split()[0] in ("/system", "/quiet", "/ctl")):
+                print("-- no page yet: open the page (it connects by itself)", file=sys.stderr)
             elif line.startswith("/system "):
                 await chat.system(line[8:])
             elif line.startswith("/quiet "):
@@ -273,6 +340,14 @@ async def main(url):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        sys.exit("python -m fsttm_web.chat ws://HOST:PORT/host   (a server with fsttm_web.aiohttp.host_route)")
-    asyncio.run(main(sys.argv[1]))
+    a = sys.argv[1:]
+    try:
+        if len(a) in (2, 3) and a[0] == "--serve":
+            asyncio.run(serve(int(a[1]), *a[2:]))
+        elif len(a) == 1 and not a[0].startswith("-"):
+            asyncio.run(main(a[0]))
+        else:
+            sys.exit("python -m fsttm_web.chat ws://HOST:PORT/host   (a server with fsttm_web.aiohttp.host_route)\n"
+                     "python -m fsttm_web.chat --serve PORT [BIND]  (a Relay of its own: the page's hostLink at /page)")
+    except KeyboardInterrupt:
+        pass

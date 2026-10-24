@@ -25,6 +25,9 @@ serves the hosts at /host (Chat.connect, python -m fsttm_web.chat ws://…/host)
         relay.drop_page(sock.send_json)
         return sock
     host_route(app, relay)
+
+Where the page's backend holds no socket (llama-server: run.sh), the page opens one to a Relay of
+its own (the panel's hostLink): page_route serves it (python -m fsttm_web.chat --serve).
 """
 from aiohttp import WSMsgType, web
 
@@ -32,6 +35,19 @@ from . import LIB, WEB, asset
 from . import protocol as wire
 
 _NO_CACHE = {"Cache-Control": "no-store"}
+
+
+def _closed_on_shutdown(app):
+    """A set of the route's sockets, closed when the app shuts down (an open page's socket would
+    hold the runner's cleanup for its whole timeout)."""
+    import weakref
+    socks = weakref.WeakSet()
+
+    async def close(_app):
+        for ws in list(socks):
+            await ws.close(code=1001, message=b"server shutdown")
+    app.on_shutdown.append(close)
+    return socks
 
 
 def mount(app, page=True, extra_assets=None):
@@ -67,9 +83,12 @@ def mount(app, page=True, extra_assets=None):
 def host_route(app, relay, path="/host"):
     """The hosts' side of a Relay (fsttm_web.chat): each host socket at path sends chat/ctl to the
     pages and hears their chat/event/state."""
+    socks = _closed_on_shutdown(app)
+
     async def host(request):
         sock = web.WebSocketResponse(heartbeat=30)
         await sock.prepare(request)
+        socks.add(sock)
         relay.add_host(sock.send_json)
         try:
             async for msg in sock:
@@ -80,4 +99,30 @@ def host_route(app, relay, path="/host"):
             relay.drop_host(sock.send_json)
         return sock
     app.router.add_get(path, host)
+    return app
+
+
+def page_route(app, relay, path="/page", on_page=None):
+    """The pages' side of a Relay where the backend holds no socket of theirs (llama-server): each
+    page socket at path (the panel's hostLink) hears the hosts' chat/ctl and sends its chat/event/
+    state on to them. on_page(n): the open pages, after each opens or closes."""
+    socks = _closed_on_shutdown(app)
+
+    async def page(request):
+        sock = web.WebSocketResponse(heartbeat=30)
+        await sock.prepare(request)
+        socks.add(sock)
+        relay.add_page(sock.send_json)
+        if on_page:
+            on_page(len(relay.pages))
+        try:
+            async for msg in sock:
+                if msg.type == WSMsgType.TEXT and (m := wire.parse(msg.data)):
+                    await relay.from_page(m)
+        finally:
+            relay.drop_page(sock.send_json)
+            if on_page:
+                on_page(len(relay.pages))
+        return sock
+    app.router.add_get(path, page)
     return app

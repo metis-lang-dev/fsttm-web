@@ -1,8 +1,9 @@
-// page_e2e.mjs — the reference page (web/index.html) as one dialog panel, in headless Chrome on the
-// stub backend in the page (?backend=stub, voice off): a typed line and its rows; the strip (barge-in
-// live on the dialog, the reply mode the backend gets, attention); the four sections, closed until
-// opened and kept open across a reload; a backend's narration; ?selftest's event table; the dock
-// example (web/panel.html) with the strip and no sections.
+// page_e2e.mjs — the reference page (web/index.html): one dialog panel in the consoles' shell, in
+// headless Chrome on the stub backend in the page (?backend=stub, voice off): the chat aligned with
+// the band and inside the window; the mic switch in the band; a typed line and its rows; the strip
+// (barge-in live on the dialog, the reply mode the backend gets, attention); the sections in the
+// docks (floor, state, events), drawn while open, kept across a reload; a backend's narration;
+// ?selftest's event table; a 329 px dock with the sections inline; the dock example (web/panel.html).
 //
 //   node test/page_e2e.mjs        (node >= 22; exit 1 on a failure)
 import { open, checks, sleep } from './cdp.mjs';
@@ -17,8 +18,25 @@ try {
   c.ok(await ev(`document.querySelector('#dialog .fw-controls [aria-label="barge-in"]').value`) === 'words', 'the strip: barge-in words');
   c.ok(await ev(`document.querySelector('#dialog .fw-controls [aria-label="reply mode"]').value`) === 'talk', 'the strip: replies long');
   c.ok(await ev(`!document.querySelector('#dialog .fw-attn').hidden && document.querySelector('#dialog .fw-attn').textContent`) === 'awake', 'the strip: attention awake (a wake word)');
-  const secs = await ev(`[...document.querySelectorAll('#dialog details.fw-sec')].map(d => d.dataset.sec + (d.open ? '+' : '-')).join()`);
-  c.ok(secs === 'floor-,state-,turns-,events-', 'the sections: floor, state, turns, events, closed', secs);
+  const docks = () => ev(`['floor', 'state', 'events'].map(n => { const d = document.getElementById('dock-' + n); return n + (d.hidden ? '_' : d.classList.contains('open') ? '+' : '-'); }).join()`);
+  c.ok(await docks() === 'floor+,state-,events_', 'the docks: floor open, state folded, events hidden', await docks());
+  c.ok(await ev(`!document.querySelector('#dialog details, #dialog .fw-sections') && ['floor', 'state', 'events'].every(n => document.querySelector('#sec-' + n + ' > .fw-part-' + n))`), 'the sections are in the docks, none in the chat');
+  c.ok(await ev(`!document.querySelector('#dialog .fw-turns, #right .fw-turns')`), 'no turns section');
+
+  // the chat: its edge is the band's, its input inside the window
+  const edge = await ev(`[document.querySelector('#band .brand').getBoundingClientRect().left, document.querySelector('#dialog .fw-bar').getBoundingClientRect().left, document.querySelector('#dialog .fw-input .fw-text').getBoundingClientRect().left]`);
+  c.ok(Math.abs(edge[0] - edge[1]) < 1 && Math.abs(edge[0] - edge[2]) < 1, 'the chat aligned with the band', edge);
+  c.ok(await ev(`document.querySelector('#dialog .fw-input').getBoundingClientRect().bottom <= innerHeight`), 'the input line inside the window');
+
+  // the mic: a switch in the band (none by the text line); it follows the panel, its light flashes on a word
+  const sw = () => ev(`(() => { const b = document.querySelector('#band .fw-switch'); return b && [b.getAttribute('role'), b.dataset.state, b.getAttribute('aria-checked'), b.querySelector('.fw-sw-word').textContent].join('|'); })()`);
+  c.ok(await sw() === 'switch|off|false|off' && await ev(`!document.querySelector('#dialog .fw-mic')`), 'the mic switch in the band: off', await sw());
+  await ev(`(() => { panel.core.listening = true; panel.core.changed(); })()`);
+  c.ok(await sw() === 'switch|on|true|on', 'listening: the switch on', await sw());
+  await ev(`panel.core.event('interim', { text: 'hel' })`);
+  c.ok(await ev(`document.querySelector('#band .fw-switch').classList.contains('fw-sw-ping')`), 'a word heard: the light flashes');
+  await ev(`(() => { panel.core.listening = false; panel.core.changed(); })()`);
+  c.ok(await sw() === 'switch|off|false|off', 'off again', await sw());
 
   // a typed line: the person's row, the reply's (two sentences in talk mode)
   await page.mouse('#dialog .fw-input .fw-text');
@@ -37,20 +55,23 @@ try {
   c.ok(await ev(`fsttmDialog.attention.state`) === 'ASLEEP' && await ev(`document.querySelector('#dialog .fw-attn').textContent`) === 'asleep', 'attention: the button puts her to sleep');
   await page.mouse('#dialog .fw-attn');
 
-  // the sections: opened by their summary, each with its contents
-  for (const n of ['floor', 'state', 'turns', 'events']) {   // the sections' column scrolls: a summary below it is scrolled to, as a reader would
-    await ev(`document.querySelector('#dialog details[data-sec="${n}"] > summary').scrollIntoView({ block: 'center' })`);
-    await page.mouse(`#dialog details[data-sec="${n}"] > summary`);
-  }
+  // the docks: the strip opens state and events; each drawn once open
+  c.ok(await ev(`document.querySelector('#sec-state .fw-stats').children.length`) === 0, 'state folded: not drawn');
+  await page.mouse('#strip [data-strip="state"]');
+  await page.mouse('#strip [data-strip="events"]');
   await sleep(400);
-  c.ok(await ev(`document.querySelector('#dialog .fw-fsm .fsm-node.cur')?.textContent`) === await ev(`fsttmDialog.fsttm.state`), 'floor: the current state marked', await ev(`fsttmDialog.fsttm.state`));
-  c.ok(/s · from|for/.test(await ev(`document.querySelector('#dialog .fw-dwell').textContent`)), 'floor: the dwell');
-  const stats = await ev(`Object.fromEntries([...document.querySelectorAll('#dialog .fw-stats dt')].map(dt => [dt.textContent, dt.nextElementSibling.textContent]))`);
+  c.ok(await docks() === 'floor+,state+,events+', 'the strip: state and events open', await docks());
+  c.ok(await ev(`document.querySelector('#right .fw-fsm .fsm-node.cur')?.textContent`) === await ev(`fsttmDialog.fsttm.state`), 'floor: the current state marked', await ev(`fsttmDialog.fsttm.state`));
+  c.ok(/s · from|for/.test(await ev(`document.querySelector('#right .fw-dwell').textContent`)), 'floor: the dwell');
+  const stats = await ev(`Object.fromEntries([...document.querySelectorAll('#right .fw-stats dt')].map(dt => [dt.textContent, dt.nextElementSibling.textContent]))`);
   c.ok(stats['barge-in'] === 'energy' && stats.reply === 'replies: short' && stats.backend === 'stub (in the page)' && stats.turns === '2', 'state: the controls, the backend, the turns', stats);
-  const turns = await ev(`[...document.querySelectorAll('#dialog .fw-turns tbody tr')].map(tr => [...tr.cells].map(td => td.textContent).join('|'))`);
-  c.ok(turns.length === 2 && turns[0].startsWith('1|replies: long|hello there') && turns[1].startsWith('2|replies: short|what time is it'), 'turns: one row a turn, by mode', turns);
-  const evs = await ev(`document.querySelector('#dialog .fw-events').textContent`);
+  const evs = await ev(`document.querySelector('#right .fw-events').textContent`);
   c.ok(/ typed \{"text":"hello there"\}/.test(evs) && / policy \{"bargeIn":"energy"\}/.test(evs), 'events: the dialog log (typed, the policy)', evs.slice(0, 300));
+  c.ok(await ev(`(() => { const e = document.querySelector('#right .fw-events'), d = document.getElementById('dock-events').getBoundingClientRect(), r = e.getBoundingClientRect(); return r.bottom <= d.bottom + 0.5 && r.height > 40; })()`), 'events: the log fills its dock, inside it');
+  // a dock's header folds it: the panel stops drawing it
+  await page.mouse('#dock-floor > header .tt');
+  c.ok(await docks() === 'floor-,state+,events+' && await ev(`!panel.isOpen('floor') && !panel.tick`), 'floor folded: not drawn, no tick', await docks());
+  await page.mouse('#dock-floor > header .tt');
 
   // a backend's narration: shown with its kind and form (voice off: not spoken)
   await ev(`fsttmBackend.narrate('The door opened.')`);
@@ -58,8 +79,7 @@ try {
 
   // the open sections are the page's: kept across a reload
   await page.goto('index.html?backend=stub&voice=0');
-  const kept = await ev(`[...document.querySelectorAll('#dialog details.fw-sec')].map(d => d.dataset.sec + (d.open ? '+' : '-')).join()`);
-  c.ok(kept === 'floor+,state+,turns+,events+', 'the open sections kept across a reload', kept);
+  c.ok(await docks() === 'floor+,state+,events+' && await ev(`panel.isOpen('events') && panel.isOpen('state')`), 'the docks kept across a reload', await docks());
 
   // ?selftest: the event table in this Chrome
   await page.goto('index.html?backend=stub&voice=0&selftest');
@@ -81,9 +101,6 @@ try {
   c.ok(fit.length === 4 && fit.every(Boolean), 'a 329 px dock with a full log: every summary inside it', fit);
   c.ok(await ev(`(() => { const l = document.querySelector('#dock329 .fw-log'); return l.scrollHeight > l.clientHeight; })()`), 'the log gives way: it scrolls');
   await ev(`document.getElementById('dock329').remove()`);
-
-  // the reference page's sections column keeps the whole height (no dock cap)
-  c.ok(await ev(`(() => { const s = document.querySelector('#dialog .fw-sections'), p = document.querySelector('#dialog'); return s.getBoundingClientRect().height > p.getBoundingClientRect().height * 0.6; })()`), "the page's sections column: more than half the panel");
 
   // the dock example: the strip, no sections, no backend said in a note
   await page.goto('panel.html');

@@ -1,54 +1,85 @@
 <!doctype html>
-<html lang="en" class="h-full">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fsttm-web</title>
-<!-- Tailwind, no bundler: npm run build (src/input.css → styles.css); the dialog is lib/panel.js with lib/panel.css -->
-<link rel="stylesheet" href="styles.css">
+<!-- the consoles' shell (web/vendor/shell.*: the band, the docks and their strip; copies of metis-loop's), the
+     dialog is lib/panel.js with lib/panel.css, the mic in the band lib/switch.js -->
+<link rel="stylesheet" href="vendor/shell.css">
 <link rel="stylesheet" href="lib/panel.css">
+<link rel="stylesheet" href="lib/switch.css">
 <link rel="stylesheet" href="lib/narrator.css">
+<script src="vendor/shell.js"></script>
 <style>
-  /* the reference page is one panel: the chat on the left, its sections on the right */
-  #dialog { --fw-accent: #34d399; --fw-side: #fbbf24; font-size: 14px; min-height: 36rem; }
-  #dialog .fw-ctl { background: #0f172a; }
-  #dialog .fw-log { padding-right: 4px; }
-  #dialog .fw-input .fw-text { background: #020617; color: inherit; border: 1px solid #334155; border-radius: 6px; padding: 5px 8px; }
-  #dialog .fw-mic { background: #0f172a; color: inherit; border: 1px solid #475569; border-radius: 6px; padding: 4px 10px; }
-  #dialog .fw-sec { border-color: #1e293b; }
-  @media (min-width: 900px) {
-    #dialog.fw-panel { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); grid-template-rows: auto minmax(0, 1fr); gap: 0 16px; }
-    #dialog .fw-bar { grid-column: 1 / -1; }
-    #dialog .fw-sections { padding-top: 0; max-height: none; }   /* a column of its own here: the whole height */
-  }
+  /* the dialog in the shell's tokens (one look with the consoles): the chat on the left, its sections in the docks */
+  :root { --fw-accent: var(--green); --fw-side: var(--yellow); }
+  #left { padding: 0 12px 6px; }                 /* the chat's edge is the band's */
+  #dialog { flex: 1 1 auto; min-height: 0; }
+  #dialog .fw-bar { padding: 6px 0 4px; border-bottom: 1px solid var(--line); }
+  #dialog .fw-title { color: var(--dim); font-weight: normal; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+  #dialog .fw-ctl { background: var(--bg); border-color: var(--line); border-radius: 0; }
+  #dialog .fw-attn[aria-pressed="true"] { color: var(--bg); background: var(--green); border-color: var(--green); }
+  #dialog .fw-row { grid-template-columns: 4.5em 1fr; }
+  #dialog .fw-who { color: var(--dim); opacity: 1; }
+  #dialog .fw-agent .fw-text { color: var(--green); }
+  #dialog .fw-note .fw-text { color: var(--dim); }
+  #dialog .fw-input { padding: 6px 0 0; border-top: 1px solid var(--line); }
+  #dialog .fw-input .fw-text { background: var(--bg); border: 1px solid var(--line); padding: 2px 6px; }
+  #dialog .fw-voice { color: var(--dim); }
+  #hint { color: var(--faint); font-size: 11px; margin: 4px 0 0; }
+  #hint code { color: var(--dim); white-space: nowrap; }
+  .dock .dbody { display: flex; flex-direction: column; overflow: hidden; }
+  #band .fw-switch { padding: 0 8px; border-color: var(--line); border-radius: 0; }
+  #status.v { color: var(--dim); }
 </style>
 </head>
-<body class="h-full bg-slate-950 text-slate-200 font-sans antialiased">
-<div class="mx-auto max-w-7xl p-3 md:p-4 flex flex-col gap-3 h-full">
-
-  <header class="flex flex-wrap items-center gap-3 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
-    <span class="text-sm font-bold tracking-wide text-cyan-300">fsttm-web</span>
-    <span id="mode" class="text-[11px] font-mono text-slate-500">dialog</span>
-    <span id="status" class="text-[11px] font-mono text-slate-500">loading…</span>
-    <span id="narrator" title="select text, then F8"></span>
-    <button id="sayLong" type="button" class="btn ml-auto" title="a fixed long announcement to talk over">say something long</button>
-  </header>
-
-  <main id="dialog" class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 flex-1"></main>
-
-  <p class="text-[11px] text-slate-500 shrink-0">
-    <b>mic</b> starts the dialog and wakes her (<code>?asleep</code>: wake word first). Talk over her to barge in; "stop" cuts at once.
-    The strip sets the barge-in policy, attention and the replies; the sections open the floor, the numbers, the turns and the events (saved as JSONL).
-    <code>?reply=short</code> starts in the intent mode; <code>?wake=a,b</code> sets the wake words; <code>?backend=stub</code> needs no server.
-    <a class="underline" href="?selftest">?selftest</a> runs the event table in this Chrome.</p>
-</div>
+<body>
+<header id="band">
+  <div class="l">
+    <span class="brand">FSTTM-WEB</span>
+    <span><b>BACKEND</b><span class="v" id="backend">…</span></span>
+    <span><b>STATUS</b><span class="v" id="status">loading…</span></span>
+    <span id="mode" hidden></span>
+    <span id="sessbar">
+      <span id="host" hidden></span>
+      <span id="mic"></span>
+      <span id="narrator" title="select text, then F8"></span>
+      <button id="sayLong" type="button" class="btn" title="a fixed long announcement to talk over">say something long</button>
+    </span>
+  </div>
+</header>
+<main>
+  <section id="left">
+    <div id="dialog"></div>
+    <p id="hint"><b>mic</b> starts the dialog and wakes her (<code>?asleep</code>: wake word first). Talk over her to barge in; "stop" cuts at once.
+      <code>?reply=short</code> starts in the intent mode; <code>?wake=a,b</code> sets the wake words; <code>?backend=stub</code> needs no server;
+      <a href="?selftest">?selftest</a> runs the event table in this Chrome.</p>
+  </section>
+  <div id="split"></div>
+  <aside id="right">
+    <section class="dock" id="dock-floor" data-dock="floor" aria-label="the floor machine">
+      <header><span class="tw">▾</span><span class="tt">FLOOR</span><button class="x" type="button" aria-label="hide the floor">✕</button></header>
+      <div class="dbody" id="sec-floor"></div>
+    </section>
+    <section class="dock" id="dock-state" data-dock="state" aria-label="the state and the numbers">
+      <header><span class="tw">▾</span><span class="tt">STATE</span><button class="x" type="button" aria-label="hide the state">✕</button></header>
+      <div class="dbody" id="sec-state"></div>
+    </section>
+    <section class="dock" id="dock-events" data-dock="events" aria-label="the event log">
+      <header><span class="tw">▾</span><span class="tt">EVENTS</span><button class="x" type="button" aria-label="hide the events">✕</button></header>
+      <div class="dbody" id="sec-events"></div>
+    </section>
+  </aside>
+  <nav id="strip"><button type="button" data-strip="floor">Floor</button><button type="button" data-strip="state">State</button><button type="button" data-strip="events">Events</button></nav>
+</main>
 <!-- the framework's modules by their package names (package.json "exports"); run.sh serves lib/ as lib/ -->
 <script type="importmap">
 { "imports": { "fsttm-web/fsttm": "./lib/fsttm.js", "fsttm-web/attention": "./lib/attention.js",
                "fsttm-web/dialog": "./lib/dialog.js", "fsttm-web/tts": "./lib/tts.js",
                "fsttm-web/ws": "./lib/ws.js", "fsttm-web/panel": "./lib/panel.js",
                "fsttm-web/narrator": "./lib/narrator.js", "fsttm-web/bench": "./lib/bench.js",
-               "fsttm-web/fsmview": "./lib/fsmview.js" } }
+               "fsttm-web/fsmview": "./lib/fsmview.js", "fsttm-web/switch": "./lib/switch.js" } }
 </script>
 <script type="module" src="app.js"></script>
 </body>

@@ -277,6 +277,26 @@ const rows = p => p.rows.map(r => `${r.who}${r.via ? ':' + r.via : ''}${r.channe
   for (let i = 0; i < 5; i++) await tick();
   ok(backend.turns.length === 1 && sent.length === 0, 'no host: chat{user} still the one entry, nothing sent back');
 }
+// the backchannel on a link of its own (llama-server has no socket: run.sh's terminal): host on by default
+{
+  const sent = [], link = { send: f => sent.push(f), onFrame: null };
+  const { p, backend } = make({ hostLink: link });
+  backend.send = () => { throw new Error('the backend is not the host'); };
+  ok(typeof link.onFrame === 'function' && p.host?.rows && p.host.state, 'hostLink: its frames are the panel\'s, the host on');
+  link.onFrame({ ev: 'chat', who: 'user', text: 'go to the door', id: 'k1' });
+  for (let i = 0; i < 5; i++) await tick();
+  ok(backend.turns.at(-1)?.text === 'go to the door' && sent.some(f => f.ev === 'chat' && f.who === 'user' && f.host_id === 'k1'), 'hostLink: the line is a turn, its row back on the link');
+  const n = sent.filter(f => f.ev === 'state').length;
+  p.changed();
+  ok(sent.filter(f => f.ev === 'state').length === n, 'the state is not sent again unchanged');
+  p.hostOpened();
+  ok(sent.filter(f => f.ev === 'state').length === n + 1, 'hostOpened: the state again, for a host that came (back)');
+}
+{
+  const link = { send() {}, onFrame: null };
+  const { p } = make({ hostLink: link, host: false });
+  ok(p.host === null, 'hostLink with host false: frames heard, nothing sent back');
+}
 
 await tick();
 console.log(`${pass}/${pass + fail} panel checks`);

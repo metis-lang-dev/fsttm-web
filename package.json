@@ -20,6 +20,8 @@
     "./panel.css": "./lib/panel.css",
     "./narrator": "./lib/narrator.js",
     "./narrator.css": "./lib/narrator.css",
+    "./switch": "./lib/switch.js",
+    "./switch.css": "./lib/switch.css",
     "./fsttm.json": "./lib/fsttm.json",
     "./fixtures/*": "./lib/fixtures/*"
   },
