@@ -35,12 +35,18 @@ const USER = [
   [LINES, 'put the tomato in the microwave'], [LINES, 'take the tomato'], [LINES, 'go to the kitchen'],
   [LINES, 'what is in the fridge'], [LINES, 'new game'], [CARD, 'what can you do'], [CARD, 'start a new game'],
   [CARD, 'put the pencil in the drawer'], [CARD, 'tell me more'],
+  [CARD, 'new game'], [CARD, 'put a mug in the sink'], [CARD, 'go to the fridge'],
+  [LINES, 'put the apple in the fridge'], [LINES, 'open the fridge'], [LINES, 'what is on the table'],
 ];
+// the user's words that start with hers, word for word: text cannot tell them from her echo, the segment's
+// start can (her quiet longer than the recognizer's lag: no echo in it), checked on the dialog below
+const SAME = [[CARD, 'put the apple in the fridge'], [LINES, 'go to countertop two']];
 const past = (t, sp) => JSON.stringify(pastEcho(t, sp));
 let minEcho = 1, maxUser = 0;
 for (const [sp, t] of ECHOES) { const s = echoShare(t, sp); minEcho = Math.min(minEcho, s); check(`echo ${s.toFixed(2)} "${t}"`, isEcho(t, sp), s); }
 for (const [sp, t] of USER) { const s = echoShare(t, sp); maxUser = Math.max(maxUser, s); check(`user ${s.toFixed(2)} "${t}"`, !isEcho(t, sp) && pastEcho(t, sp) === t, `${s} past "${pastEcho(t, sp)}"`); }
 console.log(`     echoes share ${minEcho.toFixed(2)}–1.00, the user's words at most ${maxUser.toFixed(2)}; ECHO = ${ECHO}`);
+for (const [sp, t] of SAME) console.log(`     her words first ${echoShare(t, sp).toFixed(2)} "${t}": past the echo "${pastEcho(t, sp)}", echo=${isEcho(t, sp)}`);
 check('ECHO lies between them', minEcho >= ECHO && maxUser < ECHO, `${minEcho} ${maxUser}`);
 for (const sp of [LINES, CARD, ['Stop the timer.']]) check(`"stop" is never echo (${sp[0].slice(0, 20)}…)`, !isEcho('stop', sp));
 { const Q = ['Have you ever thought about how all those different worlds manage to stay in orbit around the Sun?']; // Chrome, 2026-10-24
@@ -128,6 +134,18 @@ async function backlog(c, lines = LINES) {
   c.d.interim('I take tomato one from countertop three new game');
   check('echo then user words: the echo holds, the user words cut', mid && c.events.find(e => e.kind === 'cut')?.interim === 'new game',
     `mid=${mid} cut=${JSON.stringify(c.events.find(e => e.kind === 'cut'))}`);
+}
+{ // her words first: after she was quiet, the segment holds no echo; over her, the same words are echo
+  for (const [sp, t] of SAME) {
+    const c = make(); c.d.say(sp, 'narration'); await tick(); c.adv(3000); c.tts.finish(); c.adv(1500);
+    const words = t.split(' ');
+    for (let i = 1; i <= words.length; i++) { c.d.interim(words.slice(0, i).join(' ')); c.adv(150); }
+    await c.d.final(t);
+    check(`"${t}" 1.5 s after her: the user's, whole`, c.calls.join() === t, c.calls);
+    const o = make(); o.d.say(sp, 'narration'); await tick(); o.adv(3000); o.tts.finish(); o.adv(400);
+    o.d.interim(words.slice(0, 2).join(' ')); o.adv(1100); await o.d.final(t);
+    check(`"${t}" begun 0.4 s after her (the recognizer's lag): measured on text, her words stripped`, o.calls.join() !== t, o.calls);
+  }
 }
 { // "stop" at any time: over a line, over the card line, right after the backlog
   for (const [name, sp] of [['a line', ['I go to countertop 3.']], ['the card line', CARD]]) {
