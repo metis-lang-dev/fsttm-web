@@ -24,7 +24,7 @@ lib/   fsttm.js fsttm.json   the floor machine and its table (the machine as dat
        fsmview.js            the floor machine drawn (the panel's floor section)
        bench.js              every dialog event, timed, and the barge-in numbers (the panel's state and events)
        narrator.js (+css)    the page's selected text read aloud on one key, beside the dialog (below)
-       switch.js (+css)      an on/off switch with its light for a header row; voiceWidget: the mic and the narrator
+       switch.js (+css)      an on/off switch with its light for a header row; voiceWidget: the mic, the voice and the narrator
        fixtures/             the floor machine's and attention's cases as data (canonical)
 ```
 
@@ -116,8 +116,10 @@ window.say = text => panel.say(text);
   follows the panel: `fn({state})`, `fn({event})`. `narratorLabel(narrator, {key})` is the
   narrator (below), always on: its name, coloured while it reads, pauses or is held for the
   dialog, a click its key's press, the sentence and n of N in its title; `voiceWidget(panel,
-  {narrator, key, micKey})` is the header's one card: [● mic ⟦switch⟧ narrator], no on/off words;
-  F9 turns the mic on and off (`micKey`), F8 is the narrator's. `toggleSwitch({label, onChange})` is the switch
+  {narrator, key, micKey, speakKey, store})` is the header's one card: [● mic ⟦switch⟧ ● voice ⟦switch⟧ narrator],
+  no on/off words; F9 turns the mic on and off (`micKey`), Shift+8 the voice — the replies spoken — outside a text
+  field (`speakKey`; kept per page under `store`), F8 is the narrator's. The panel's own 'voice' tick by the text
+  line is off by default (`voiceBox: true` brings it back on a page without the header card). `toggleSwitch({label, onChange})` is the switch
   for anything else. Their "on" is green (`--fw-switch-on`), not the page's accent.
 - `meta: true` shows each row's small print: the input's source and the floor, a
   narration's kind and form. `narrate(frame)` says which narrations are voiced (default:

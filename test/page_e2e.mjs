@@ -49,8 +49,8 @@ try {
 
   // the narrator, always on: its name in the voice card after the mic (no switch, no words); a click is its key's press
   const nar = () => ev(`(() => { const b = document.querySelector('#voice .fw-narr'); return b && [b.dataset.state, b.dataset.ready].join('|'); })()`);
-  c.ok(await ev(`(() => { const v = document.getElementById('voice'); return v.classList.contains('fw-voicebar') && v.querySelectorAll('.fw-switch').length === 1
-    && v.textContent === 'micnarrator' && !document.querySelector('#band .narrator'); })()`), 'one voice card: [● mic ⟦switch⟧ narrator], no on/off words', await ev(`document.getElementById('voice').textContent`));
+  c.ok(await ev(`(() => { const v = document.getElementById('voice'); return v.classList.contains('fw-voicebar') && v.querySelectorAll('.fw-switch').length === 2
+    && v.textContent === 'micvoicenarrator' && !document.querySelector('#band .narrator'); })()`), 'one voice card: [● mic ⟦switch⟧ ● voice ⟦switch⟧ narrator], no on/off words', await ev(`document.getElementById('voice').textContent`));
   c.ok(await nar() === 'stopped|0', 'the narrator: stopped, nothing selected (dim)', await nar());
   await ev(`(() => { const r = document.createRange(); r.selectNodeContents(document.getElementById('hint')); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
   c.ok(await until(`document.querySelector('#voice .fw-narr').dataset.ready === '1'`), 'text selected: ready');

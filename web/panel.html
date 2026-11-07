@@ -34,7 +34,7 @@
   const backend = await connect(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`, { reconnect: 2000 });
   const table = await (await fetch('lib/fsttm.json')).json();
   const panel = new Panel(document.getElementById('dock'), {
-    backend, table, title: 'dialog',
+    backend, table, title: 'dialog', voiceBox: true,    // no header widget on this page: the voice's tick by the text line
   });
   if (!backend) panel.note('no backend on /ws: python examples/serve.py');
   window.say = text => panel.say(text);
